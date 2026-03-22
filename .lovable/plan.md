@@ -1,66 +1,62 @@
 
 
-# Adapt Code Review Fixes to the Map
+# Implement All REST API Endpoints as Edge Functions
 
-The user's code review references a Next.js `PhantomMap.tsx` from a different codebase. This project uses CesiumJS via `useCesiumMap.ts` with modular draw functions. I'll adapt the relevant errors/fixes to the actual files here.
+The Fabricate/Tonic API defines 16 endpoints. Currently the project has 6 edge functions (`cascade`, `phantom-mcp`, `ingest-signals`, `ollam-chat`, `get-maptiler-key`, `flush-database`). Many Fabricate routes are partially covered by `phantom-mcp` tools or `cascade`, but there's no direct REST API surface matching the Fabricate spec.
 
-## What applies and what doesn't
+## Mapping: Fabricate Routes → Implementation
 
-| Review Error | Applies? | Reason |
+| Fabricate Route | Status | Implementation |
 |---|---|---|
-| 1. Ion asset IDs | No | This project doesn't use Cesium Ion assets at all — uses MapTiler |
-| 2. Hardcoded Ion token | No | No Ion token in this codebase |
-| 3. imageryProvider: false cast | No | Already uses `viewer.imageryLayers.removeAll()` correctly |
-| 4. getWindowDays | No | No TimeWindow type in this codebase |
-| 5. CascadeTab Math.sin cosmetic | **Yes** | The cascade edge function needs evidence-based scoring |
-| 6. Entity rebuild dependency guards | **Yes** | `drawOfficialPOEs` re-runs on every render cycle due to `loadOfficialPOEs` recreating |
-| 7. Google Photorealistic | No | Not used here |
-| 8. GeoJsonDataSource cast | No | Not used here |
-| 9. Bar component nullable | No | No Bar component in this codebase |
-| 10. Evidence source filtering | **Yes** | `CorridorOverlay` shows all evidence without source badges |
+| `GET /api/corridors` | **New** | Edge function `api-corridors` — query `poe_corridors` with filters (risk, country, activated) |
+| `GET /api/corridors/:id` | **New** | Same function, path param — join terrain, divergence, evidence |
+| `GET /api/corridors/:id/cascade` | **Exists** | `cascade` edge function already does this |
+| `GET /api/corridors/:id/evidence-chain` | **New** | Edge function `api-evidence-chain` — query `corridor_evidence_chains` |
+| `GET /api/corridors/:id/friction-surface` | **New** | Edge function `api-friction` — query `friction_cells` for corridor |
+| `GET /api/detections` | **New** | Edge function `api-detections` — query `poe_detection_events` with since/severity/unread filters |
+| `PUT /api/detections/:id/ack` | **New** | Same function, PUT — update `acknowledged = true` |
+| `GET /api/diagnostics` | **Partial** | `phantom-mcp` has `test_connections` — create dedicated `api-diagnostics` querying `diagnostic_results` |
+| `GET /api/divergence` | **New** | Edge function `api-divergence` — query `poe_divergence` joined with `poe_corridors` |
+| `GET /api/entropy` | **New** | Edge function `api-entropy` — query `entropy_results` with spiked/risk filters |
+| `GET /api/lane` | **New** | Edge function `api-lane` — query `data_lanes` |
+| `PUT /api/lane/:laneId` | **New** | Same function, PUT — switch active lane |
+| `GET /api/phantom-nodes` | **New** | Edge function `api-phantom-nodes` — query `phantom_node_registry` with type/country filters |
+| `GET /api/poll` | **New** | Edge function `api-poll` — master polling: corridors + detections + signals since timestamp |
+| `GET /api/runs` | **New** | Edge function `api-runs` — query `ingestion_runs` |
+| `GET /api/runs/:runId` | **New** | Same function, path param |
+| `GET /api/signals` | **Partial** | `phantom-mcp` has `fetch_sentinel_signals` — create dedicated `api-signals` |
 
-**Additional issues found in the actual codebase:**
+## Implementation approach
 
-| Issue | File | Description |
-|---|---|---|
-| Static coordinate readout | `MapArea.tsx:65-69` | Always shows "LAT -1.5000, LNG 34.0000" — never updates with camera |
-| `drawOfficialPOEs` queries `country_code` column | `drawOfficialPOEs.ts:13` | Types show the column is `country`, not `country_code` |
-| No animated dash flow | `drawCorridor.ts` | Uses static `PolylineDashMaterialProperty` — no `CallbackProperty` animation |
-| `corridor_nodes` column mismatch | `drawGapZones.ts:26` | Queries `node_order` but types show `order_index` |
-| Cascade function returns static HMM states | `cascade/index.ts` | Should compute from evidence scores, not hardcode |
+Create **9 edge functions** that cover all 16 routes (grouping related routes):
 
-## Implementation Plan
+1. **`api-corridors`** — handles `/corridors`, `/corridors/:id`, routes to `cascade` for `/corridors/:id/cascade`
+2. **`api-evidence-chain`** — `/corridors/:id/evidence-chain`
+3. **`api-friction`** — `/corridors/:id/friction-surface`
+4. **`api-detections`** — GET detections + PUT ack
+5. **`api-diagnostics`** — latest diagnostic per service
+6. **`api-divergence`** — divergence data with corridor join
+7. **`api-entropy`** — entropy results with filters
+8. **`api-lane`** — GET/PUT lane switching
+9. **`api-poll`** — master polling endpoint combining corridors, detections, signals
 
-### Step 1: Fix column name mismatches
-- `drawOfficialPOEs.ts`: Change `country_code` → `country` in select
-- `drawGapZones.ts`: Change `node_order` → `order_index` in select and order clause
+The existing `phantom-mcp` tools (`fetch_sentinel_signals`, `test_connections`) and `ingest-signals` already handle signals and runs — the new functions provide the REST surface the Fabricate spec expects.
 
-### Step 2: Animated corridor dash flow
-- In `drawCorridor.ts`, replace static `PolylineDashMaterialProperty` with a `CallbackProperty`-based animated dash that shifts offset over time, creating flowing movement along the path
+Each function follows the existing pattern: Deno `serve()`, CORS headers, service role key, query params from URL.
 
-### Step 3: Live coordinate readout
-- In `MapArea.tsx`, add a `postRender` event listener on the Cesium viewer to read camera position
-- Update the coordinate display with actual lat/lng/alt from camera
+## Files created
 
-### Step 4: Evidence source badges in CorridorOverlay
-- Add source-type badge (color-coded by ACLED/DTM/DHIS2/AFRO-SENTINEL)
-- Filter indicator to distinguish conflict/displacement/disease signals
-
-### Step 5: Stabilize entity rebuild
-- In `useCesiumMap.ts`, guard `loadOfficialPOEs` with a ref to prevent re-fetching on every render
-- Only reload when `officialPOEsVisible` transitions from false→true
-
-### Step 6: Cascade evidence-based scoring
-- In `supabase/functions/cascade/index.ts`, replace any cosmetic Math.sin scoring with actual evidence-weighted averages from `normalized_signals`
-
-### Files Modified
-| File | Change |
+| File | Purpose |
 |---|---|
-| `src/hooks/cesium/drawOfficialPOEs.ts` | Fix `country_code` → `country` |
-| `src/hooks/cesium/drawGapZones.ts` | Fix `node_order` → `order_index` |
-| `src/hooks/cesium/drawCorridor.ts` | Add animated dash flow via `CallbackProperty` |
-| `src/components/dashboard/MapArea.tsx` | Live coordinate readout from camera |
-| `src/components/dashboard/CorridorOverlay.tsx` | Source badges + evidence filtering |
-| `src/hooks/useCesiumMap.ts` | Stable POE loading guard |
-| `supabase/functions/cascade/index.ts` | Evidence-based frame scoring |
+| `supabase/functions/api-corridors/index.ts` | List/get corridors with terrain + divergence joins |
+| `supabase/functions/api-evidence-chain/index.ts` | Evidence chain for corridor |
+| `supabase/functions/api-friction/index.ts` | Friction cells for corridor |
+| `supabase/functions/api-detections/index.ts` | Detection events + acknowledge |
+| `supabase/functions/api-diagnostics/index.ts` | Latest diagnostics per service |
+| `supabase/functions/api-divergence/index.ts` | Divergence with corridor context |
+| `supabase/functions/api-entropy/index.ts` | Entropy results with filters |
+| `supabase/functions/api-lane/index.ts` | Lane get/switch |
+| `supabase/functions/api-poll/index.ts` | Master polling endpoint |
+
+All functions will be deployed and tested after creation.
 
