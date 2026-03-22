@@ -128,7 +128,7 @@ const ChatPanel = ({ collapsed, onToggle, onMapQuery }: ChatPanelProps) => {
   };
 
   const stateLabel = {
-    [CS.GENERATING]: "Ollam is responding…",
+    [CS.GENERATING]: "Phantom AI responding…",
     [CS.THINKING]: "Deep analysis…",
     [CS.EXECUTING]: "Executing tool…",
     [CS.IDLE]: "",
