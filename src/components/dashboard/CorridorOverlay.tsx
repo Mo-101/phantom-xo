@@ -1,4 +1,12 @@
+import { useState } from "react";
 import type { CorridorAnalysisResult } from "@/types/phantom";
+
+const SOURCE_COLORS: Record<string, string> = {
+  ACLED: "bg-phantom-red/20 text-phantom-red",
+  DTM: "bg-phantom-blue/20 text-phantom-blue",
+  DHIS2: "bg-phantom-teal/20 text-phantom-teal",
+  "AFRO-SENTINEL": "bg-phantom-amber/20 text-phantom-amber",
+};
 
 interface CorridorOverlayProps {
   analysis: CorridorAnalysisResult;
