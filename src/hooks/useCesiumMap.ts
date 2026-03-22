@@ -188,12 +188,14 @@ export function useCesiumMap(containerRef: React.RefObject<HTMLDivElement | null
     if (!ctx) return;
 
     try {
-      const [meta] = await Promise.all([
+      const [meta, , , xpData] = await Promise.all([
         drawAllCorridors(ctx),
         drawNodes(ctx),
         drawBorders(ctx),
+        drawCrossingPoints(ctx),
       ]);
       setCorridorsMeta(meta);
+      setCrossingPoints(xpData);
 
       const { data, entityIds } = await drawEvidenceLayer(ctx);
       evidenceIdsRef.current = entityIds;
