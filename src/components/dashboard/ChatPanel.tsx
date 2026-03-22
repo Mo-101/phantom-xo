@@ -155,7 +155,7 @@ const ChatPanel = ({ collapsed, onToggle, onMapQuery }: ChatPanelProps) => {
           <div className="flex items-center justify-between px-4 py-3 border-b border-border">
             <div className="flex items-center gap-2">
               <span className="text-phantom-green font-mono text-xs font-semibold tracking-wider">
-                Ollam · Mostar
+                Phantom AI · Ollam
               </span>
               <span className="w-1.5 h-1.5 rounded-full bg-phantom-green/60 animate-pulse" />
             </div>
