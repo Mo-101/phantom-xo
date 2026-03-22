@@ -108,6 +108,7 @@ const MapLegend = ({
   cascadeActive = false,
   onStartCascade,
   onStopCascade,
+  crossingPointCount = 0,
 }: MapLegendProps) => {
   const [expanded, setExpanded] = useState(true);
   const [cascadeCorridorId, setCascadeCorridorId] = useState("");
