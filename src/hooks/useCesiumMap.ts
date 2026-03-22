@@ -41,6 +41,8 @@ export function useCesiumMap(containerRef: React.RefObject<HTMLDivElement | null
   const [corridorsLoaded, setCorridorsLoaded] = useState(false);
   const [evidenceVisible, setEvidenceVisible] = useState(false);
   const [cascadeState, setCascadeState] = useState<CascadeState | null>(null);
+  const [crossingPoints, setCrossingPoints] = useState<CrossingPointData[]>([]);
+  const [selectedCorridorId, setSelectedCorridorId] = useState<string | null>(null);
   const evidenceIdsRef = useRef<string[]>([]);
   const evidenceDataRef = useRef<EvidenceSignal[]>([]);
   const cascadeEngineRef = useRef<ReturnType<typeof createCascadeEngine> | null>(null);
