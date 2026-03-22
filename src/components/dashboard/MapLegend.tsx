@@ -95,6 +95,7 @@ interface MapLegendProps {
   cascadeActive?: boolean;
   onStartCascade?: (corridorId: string) => void;
   onStopCascade?: () => void;
+  crossingPointCount?: number;
 }
 
 const MapLegend = ({
@@ -107,6 +108,7 @@ const MapLegend = ({
   cascadeActive = false,
   onStartCascade,
   onStopCascade,
+  crossingPointCount = 0,
 }: MapLegendProps) => {
   const [expanded, setExpanded] = useState(true);
   const [cascadeCorridorId, setCascadeCorridorId] = useState("");
@@ -169,6 +171,7 @@ const MapLegend = ({
               <div className="pt-1.5 mt-1.5 border-t border-border">
                 <p className="text-[9px] font-mono text-muted-foreground tabular-nums">
                   {corridorsMeta.length} corridors · 91 nodes
+                  {crossingPointCount > 0 && ` · ${crossingPointCount} FMPs`}
                 </p>
               </div>
             )}

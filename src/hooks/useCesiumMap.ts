@@ -13,6 +13,7 @@ import { drawAllCorridors } from "./cesium/drawAllCorridors";
 import { drawNodes } from "./cesium/drawNodes";
 import { drawEvidenceLayer, toggleEvidenceEntities } from "./cesium/drawEvidenceLayer";
 import { drawBorders } from "./cesium/drawBorders";
+import { drawCrossingPoints, type CrossingPointData } from "./cesium/drawCrossingPoints";
 import { createCascadeEngine, type CascadeState } from "./cesium/cascadeEngine";
 import type { EvidenceSignal } from "./cesium/drawEvidenceLayer";
 
@@ -40,6 +41,8 @@ export function useCesiumMap(containerRef: React.RefObject<HTMLDivElement | null
   const [corridorsLoaded, setCorridorsLoaded] = useState(false);
   const [evidenceVisible, setEvidenceVisible] = useState(false);
   const [cascadeState, setCascadeState] = useState<CascadeState | null>(null);
+  const [crossingPoints, setCrossingPoints] = useState<CrossingPointData[]>([]);
+  const [selectedCorridorId, setSelectedCorridorId] = useState<string | null>(null);
   const evidenceIdsRef = useRef<string[]>([]);
   const evidenceDataRef = useRef<EvidenceSignal[]>([]);
   const cascadeEngineRef = useRef<ReturnType<typeof createCascadeEngine> | null>(null);
@@ -185,12 +188,14 @@ export function useCesiumMap(containerRef: React.RefObject<HTMLDivElement | null
     if (!ctx) return;
 
     try {
-      const [meta] = await Promise.all([
+      const [meta, , , xpData] = await Promise.all([
         drawAllCorridors(ctx),
         drawNodes(ctx),
         drawBorders(ctx),
+        drawCrossingPoints(ctx),
       ]);
       setCorridorsMeta(meta);
+      setCrossingPoints(xpData);
 
       const { data, entityIds } = await drawEvidenceLayer(ctx);
       evidenceIdsRef.current = entityIds;
@@ -276,7 +281,7 @@ export function useCesiumMap(containerRef: React.RefObject<HTMLDivElement | null
     clearEntities,
     handleMapQuery,
     loadGapZones,
-    // New
+    // Visualization
     corridorsMeta,
     corridorsLoaded,
     evidenceVisible,
@@ -284,5 +289,8 @@ export function useCesiumMap(containerRef: React.RefObject<HTMLDivElement | null
     cascadeState,
     startCascade,
     stopCascade,
+    crossingPoints,
+    selectedCorridorId,
+    setSelectedCorridorId,
   };
 }
