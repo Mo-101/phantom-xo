@@ -9,6 +9,21 @@ import { drawRadar } from "./cesium/drawRadar";
 import { drawAnalysis } from "./cesium/drawAnalysis";
 import { drawOfficialPOEs } from "./cesium/drawOfficialPOEs";
 import { drawGapZones } from "./cesium/drawGapZones";
+import { drawAllCorridors } from "./cesium/drawAllCorridors";
+import { drawNodes } from "./cesium/drawNodes";
+import { drawEvidenceLayer, toggleEvidenceEntities } from "./cesium/drawEvidenceLayer";
+import { createCascadeEngine, type CascadeState } from "./cesium/cascadeEngine";
+import type { EvidenceSignal } from "./cesium/drawEvidenceLayer";
+
+interface CorridorMeta {
+  id: string;
+  name: string;
+  risk: string;
+  km: number;
+  mode: string;
+  center: [number, number];
+  zoom: number;
+}
 
 export function useCesiumMap(containerRef: React.RefObject<HTMLDivElement | null>) {
   const viewerRef = useRef<Cesium.Viewer | null>(null);
@@ -19,7 +34,15 @@ export function useCesiumMap(containerRef: React.RefObject<HTMLDivElement | null
   const [officialPOEsVisible, setOfficialPOEsVisible] = useState(true);
   const poesLoadedRef = useRef(false);
 
-  // Shared entity helper
+  // New visualization state
+  const [corridorsMeta, setCorridorsMeta] = useState<CorridorMeta[]>([]);
+  const [corridorsLoaded, setCorridorsLoaded] = useState(false);
+  const [evidenceVisible, setEvidenceVisible] = useState(false);
+  const [cascadeState, setCascadeState] = useState<CascadeState | null>(null);
+  const evidenceIdsRef = useRef<string[]>([]);
+  const evidenceDataRef = useRef<EvidenceSignal[]>([]);
+  const cascadeEngineRef = useRef<ReturnType<typeof createCascadeEngine> | null>(null);
+
   const addEntity = useCallback((id: string, options: Cesium.Entity.ConstructorOptions) => {
     const viewer = viewerRef.current;
     if (!viewer) return;
@@ -117,6 +140,12 @@ export function useCesiumMap(containerRef: React.RefObject<HTMLDivElement | null
     entityIdsRef.current = [];
     setRadarActive(false);
     poesLoadedRef.current = false;
+    setCorridorsLoaded(false);
+    evidenceIdsRef.current = [];
+    evidenceDataRef.current = [];
+    cascadeEngineRef.current = null;
+    setCascadeState(null);
+    setEvidenceVisible(false);
   }, []);
 
   const flyTo = useCallback((target: CesiumCameraTarget) => {
@@ -148,6 +177,57 @@ export function useCesiumMap(containerRef: React.RefObject<HTMLDivElement | null
     await drawGapZones(ctx, corridorDefId);
   }, [getDrawContext]);
 
+  // Load all corridors + nodes + evidence layer
+  const loadAllCorridors = useCallback(async () => {
+    if (corridorsLoaded) return;
+    const ctx = getDrawContext();
+    if (!ctx) return;
+
+    try {
+      const [meta] = await Promise.all([
+        drawAllCorridors(ctx),
+        drawNodes(ctx),
+      ]);
+      setCorridorsMeta(meta);
+
+      const { data, entityIds } = await drawEvidenceLayer(ctx);
+      evidenceIdsRef.current = entityIds;
+      evidenceDataRef.current = data;
+
+      // Create cascade engine
+      const viewer = viewerRef.current;
+      if (viewer) {
+        cascadeEngineRef.current = createCascadeEngine(viewer, data, entityIds);
+      }
+
+      setCorridorsLoaded(true);
+    } catch (err) {
+      console.warn("[Cesium] Failed to load corridor data:", err);
+    }
+  }, [corridorsLoaded, getDrawContext]);
+
+  // Toggle evidence visibility
+  const toggleEvidence = useCallback(() => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+    const newVisible = !evidenceVisible;
+    toggleEvidenceEntities(viewer, evidenceIdsRef.current, newVisible);
+    setEvidenceVisible(newVisible);
+  }, [evidenceVisible]);
+
+  // Cascade controls
+  const startCascade = useCallback((corridorId: string) => {
+    cascadeEngineRef.current?.start(corridorId, (s) => {
+      setCascadeState({ ...s });
+    });
+  }, []);
+
+  const stopCascade = useCallback(() => {
+    cascadeEngineRef.current?.stop();
+    cascadeEngineRef.current?.hideAll();
+    setCascadeState(null);
+  }, []);
+
   const handleMapQuery = useCallback((params: MapParams) => {
     const ctx = getDrawContext();
     if (!ctx) return;
@@ -171,12 +251,18 @@ export function useCesiumMap(containerRef: React.RefObject<HTMLDivElement | null
     }
   }, [flyTo, getDrawContext]);
 
-  // Load official POEs when map is ready and visible
+  // Load official POEs + all corridors when map is ready
   useEffect(() => {
     if (mapReady && officialPOEsVisible) {
       loadOfficialPOEs();
     }
   }, [mapReady, officialPOEsVisible, loadOfficialPOEs]);
+
+  useEffect(() => {
+    if (mapReady) {
+      loadAllCorridors();
+    }
+  }, [mapReady, loadAllCorridors]);
 
   return {
     viewer: viewerRef,
@@ -188,5 +274,13 @@ export function useCesiumMap(containerRef: React.RefObject<HTMLDivElement | null
     clearEntities,
     handleMapQuery,
     loadGapZones,
+    // New
+    corridorsMeta,
+    corridorsLoaded,
+    evidenceVisible,
+    toggleEvidence,
+    cascadeState,
+    startCascade,
+    stopCascade,
   };
 }

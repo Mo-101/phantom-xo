@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect, useCallback } from "react";
+import { useRef, useState, useEffect } from "react";
 import { Activity, Globe } from "lucide-react";
 import * as Cesium from "cesium";
 import { useCesiumMap } from "@/hooks/useCesiumMap";
@@ -34,9 +34,8 @@ const MapArea = ({ onMapReady }: MapAreaProps) => {
     };
 
     const removeListener = viewer.camera.changed.addEventListener(updateCoords);
-    // Set threshold so it fires on small movements
     viewer.camera.percentageChanged = 0.01;
-    updateCoords(); // initial
+    updateCoords();
 
     return () => {
       if (!viewer.isDestroyed()) removeListener();
@@ -53,7 +52,7 @@ const MapArea = ({ onMapReady }: MapAreaProps) => {
       {/* Cesium mounts here */}
       <div ref={containerRef} className="absolute inset-0" />
 
-      {/* Loading overlay — shown until Cesium renders */}
+      {/* Loading overlay */}
       {!cesium.mapReady && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-background z-10">
           <div
@@ -90,7 +89,42 @@ const MapArea = ({ onMapReady }: MapAreaProps) => {
         <MapLegend
           officialPOEsVisible={cesium.officialPOEsVisible}
           onTogglePOEs={cesium.setOfficialPOEsVisible}
+          corridorsMeta={cesium.corridorsMeta}
+          corridorsLoaded={cesium.corridorsLoaded}
+          evidenceVisible={cesium.evidenceVisible}
+          onToggleEvidence={cesium.toggleEvidence}
+          cascadeActive={cesium.cascadeState?.active ?? false}
+          onStartCascade={cesium.startCascade}
+          onStopCascade={cesium.stopCascade}
         />
+      )}
+
+      {/* Cascade HUD */}
+      {cesium.cascadeState?.active && (
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-10 animate-fade-in-up">
+          <div className="bg-card/90 border border-phantom-green/30 rounded-lg backdrop-blur-sm px-5 py-3 flex items-center gap-6">
+            <div className="text-center">
+              <p className="text-[9px] font-mono text-muted-foreground uppercase tracking-wider">Day</p>
+              <p className="text-lg font-mono text-phantom-green tabular-nums">
+                {cesium.cascadeState.day}
+              </p>
+            </div>
+            <div className="w-px h-8 bg-border" />
+            <div className="text-center">
+              <p className="text-[9px] font-mono text-muted-foreground uppercase tracking-wider">Signals</p>
+              <p className="text-lg font-mono text-foreground tabular-nums">
+                {cesium.cascadeState.signalsRevealed}
+              </p>
+            </div>
+            <div className="w-px h-8 bg-border" />
+            <div className="text-center">
+              <p className="text-[9px] font-mono text-muted-foreground uppercase tracking-wider">Score</p>
+              <p className="text-lg font-mono text-phantom-amber tabular-nums">
+                {cesium.cascadeState.cumulativeScore.toFixed(0)}
+              </p>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Live coordinate readout */}
