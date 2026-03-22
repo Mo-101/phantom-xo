@@ -281,7 +281,7 @@ export function useCesiumMap(containerRef: React.RefObject<HTMLDivElement | null
     clearEntities,
     handleMapQuery,
     loadGapZones,
-    // New
+    // Visualization
     corridorsMeta,
     corridorsLoaded,
     evidenceVisible,
@@ -289,5 +289,8 @@ export function useCesiumMap(containerRef: React.RefObject<HTMLDivElement | null
     cascadeState,
     startCascade,
     stopCascade,
+    crossingPoints,
+    selectedCorridorId,
+    setSelectedCorridorId,
   };
 }
