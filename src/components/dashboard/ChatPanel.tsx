@@ -28,7 +28,7 @@ interface ChatPanelProps {
 const ChatPanel = ({ collapsed, onToggle, onMapQuery }: ChatPanelProps) => {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [chatState, setChatState] = useState<ChatState>(CS.IDLE);
+  const [chatState, setChatState] = useState(CS.IDLE);
   const [isThinkingMode, setIsThinkingMode] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [placeholder] = useState(
