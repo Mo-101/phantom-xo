@@ -155,6 +155,7 @@ function interpolateGreatCircle(
  * using geodesic (great-circle) interpolation.
  */
 function densifyLine(coords: [number, number][], targetTotal = 40): [number, number][] {
+  // Dense terrain data already present — pass through
   if (coords.length >= targetTotal) return coords;
   const segmentCount = coords.length - 1;
   if (segmentCount < 1) return coords;
