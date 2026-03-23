@@ -17,54 +17,34 @@ const RISK_COLORS: Record<string, string> = {
   MEDIUM: "#EAB308",
 };
 
-/* ── Gradient risk color utilities ── */
-
-const GRADIENT_PEAKS: Record<string, string> = {
-  CRITICAL: "#DC2626",
-  HIGH: "#EF4444",
-  MEDIUM: "#F59E0B",
-};
-
-const GRADIENT_GREEN = { r: 34, g: 197, b: 94 };   // #22C55E
-const GRADIENT_YELLOW = { r: 234, g: 179, b: 8 };   // #EAB308
-const GRADIENT_RED = { r: 239, g: 68, b: 68 };       // #EF4444
-const GRADIENT_CRIT = { r: 220, g: 38, b: 38 };      // #DC2626
-
-function lerpColor(
-  a: { r: number; g: number; b: number },
-  b: { r: number; g: number; b: number },
-  t: number
-): { r: number; g: number; b: number } {
-  return {
-    r: Math.round(a.r + (b.r - a.r) * t),
-    g: Math.round(a.g + (b.g - a.g) * t),
-    b: Math.round(a.b + (b.b - a.b) * t),
-  };
-}
+/* ── Gradient risk color utility ── */
 
 /**
- * V-shape gradient: green at both ends, peak color at center.
- * `t` goes 0→1 along the corridor path.
- * `risk` shifts how red the peak is.
+ * V-shape gradient: green at both ends, risk-colored peak at center.
+ * `t` = 0→1 along the corridor. `score` = corridor confidence 0→1.
  */
-function scoreToColor(t: number, risk: string): Cesium.Color {
-  // V-shape: convert t to 0→1→0 (peaks at center)
-  const v = 1 - Math.abs(2 * t - 1); // 0 at ends, 1 at center
+function scoreToGradient(t: number, riskClass: string, score: number): string {
+  const midT = Math.abs(t - 0.5) * 2;
+  const riskIntensity = 1 - midT;
 
-  // Choose peak based on risk
-  const peak = risk === "CRITICAL" ? GRADIENT_CRIT
-    : risk === "HIGH" ? GRADIENT_RED
-    : GRADIENT_YELLOW;
+  const baseShift = riskClass === "CRITICAL" ? 0.5
+    : riskClass === "HIGH" ? 0.3 : 0.1;
 
-  // Two-stop gradient: green → peak
-  let rgb: { r: number; g: number; b: number };
+  const v = Math.min(1, riskIntensity * (0.7 + score * 0.3) + baseShift);
+
   if (v < 0.5) {
-    rgb = lerpColor(GRADIENT_GREEN, GRADIENT_YELLOW, v * 2);
+    const blend = v / 0.5;
+    const r = Math.round(0x22 + (0xea - 0x22) * blend);
+    const g = Math.round(0xc5 + (0xb3 - 0xc5) * blend);
+    const b = Math.round(0x5e + (0x08 - 0x5e) * blend);
+    return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
   } else {
-    rgb = lerpColor(GRADIENT_YELLOW, peak, (v - 0.5) * 2);
+    const blend = (v - 0.5) / 0.5;
+    const r = Math.round(0xea + (0xef - 0xea) * blend);
+    const g = Math.round(0xb3 + (0x44 - 0xb3) * blend);
+    const b = Math.round(0x08 + (0x44 - 0x08) * blend);
+    return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
   }
-
-  return new Cesium.Color(rgb.r / 255, rgb.g / 255, rgb.b / 255, 1.0);
 }
 
 const MODE_INFO: Record<string, { terrain: string; weather: string; description: string }> = {
