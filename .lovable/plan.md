@@ -1,74 +1,80 @@
 
 
-# Integrate 17 Phantom + 17 Formal Paired Corridors
+# Enrich Tooltips, Fix Legend, and Densify Corridor Paths
 
-The uploaded `phantom_formal_paired.geojson` contains 162 features: 17 phantom corridors, 17 formal counterparts, ~101 nodes, 17 formal gates, and 10 IOM FMPs. Each feature has a `route_type` property (`PHANTOM`, `FORMAL`, `NODE`, `PHANTOM_POE`, `FORMAL_GATE`, `IOM_FMP`) that drives styling.
+Three issues identified from reviewing the current code and data:
 
-## What changes
+## Problem 1: Tooltips lack movement intelligence
+Current tooltips show terrain, weather, and mode but miss the key operational data — estimated monthly people flow, vehicle/canoe counts, market activity, and contributing factors. The GeoJSON properties don't carry this data.
 
-### 1. Replace data file
-Copy `phantom_formal_paired.geojson` to `public/data/corridors_paired.geojson`. This replaces `corridors_dense.geojson` as the primary corridor data source.
+## Problem 2: Legend symbols don't match map
+The legend renders tiny CSS shapes (3 small dots for "dash", a rotated square for "diamond") that don't visually correspond to what users see on the Cesium globe (animated flowing dashes, large pulsing circles, etc.).
 
-### 2. Rewrite `drawAllCorridors.ts`
-Load `corridors_paired.geojson` instead of `corridors_dense.geojson`. Parse features by `route_type`:
+## Problem 3: Corridors appear as straight lines
+Each corridor has only 3-9 coordinate points with linear interpolation. The previous version used `corridors_dense.geojson` which had many more waypoints following real terrain. Need to densify coordinates using geodesic arc interpolation so lines curve naturally across the globe.
 
-- **PHANTOM** (LineString): 3-layer stack as today — glow + animated dash + spine. Color by `risk_class`. Carries existing tooltip with terrain/weather/mode info. Adds `[PHANTOM]` tag in description.
-- **FORMAL** (LineString): Solid blue line (`#3B82F6`), width 3, no animation, no glow. Clean and official-looking. Description shows monitoring coverage % and gap notes from `formal_poe_coverage` property.
-- **NODE** (Point): Render with existing node styling logic (start=green, end=red, phantom=gold pulsing, waypoint=gray, border=orange).
-- **FORMAL_GATE** (Point): Blue diamond, 14px, labeled with gate name. Same style as existing Official POE layer.
-- **IOM_FMP** (Point): Cyan circle, 10px, sized by `monthly_avg_flow`. Same style as existing crossing point markers.
-- **PHANTOM_POE** (Point): Gold circle, 16px, pulsing animation.
+---
 
-This consolidates `drawAllCorridors`, `drawNodes`, and `drawCrossingPoints` into a single unified renderer since the GeoJSON now contains everything.
+## Plan
 
-Returns updated `CorridorMeta[]` (17 phantom corridors) for legend/sidebar.
+### 1. Add movement estimates to GeoJSON properties and enrich tooltips
+Add per-corridor estimated movement data to `corridors_paired.geojson` — properties like `est_monthly_people`, `est_vehicles_day`, `est_canoe_crossings`, `market_days`, `conflict_factor`, `health_risk`, and `key_commodities` based on IOM DTM data and corridor characteristics.
 
-### 3. Update `corridors_meta.json`
-Generate new meta from the 17 phantom corridor features in the GeoJSON (id, name, risk, km, mode, center coordinates).
+Update `drawPhantomCorridor()` tooltip HTML to display:
+- **Movement Volume**: est. people/month, vehicles/day or canoe crossings/day
+- **Market Activity**: market days, key commodities traded across border
+- **Contributing Factors**: conflict displacement, seasonal labor, pastoralism
+- **Health Risk**: mpox, cholera, measles vector potential
+- **Infrastructure**: nearest health post distance, mobile coverage
 
-### 4. Update `useCesiumMap.ts`
-- Remove separate `drawNodes` and `drawCrossingPoints` calls from `loadAllCorridors`
-- The single `drawAllCorridors` call now renders everything from the paired GeoJSON
-- Keep evidence layer, cascade engine, borders as separate calls
+Update `drawFormalRoute()` tooltip to also show flow volume comparison (what formal system captures vs estimated total).
 
-### 5. Update `MapLegend.tsx`
-Reorganize into two visual groups:
+### 2. Redesign legend to match actual map visuals
+Update `MapLegend.tsx` legend shapes:
+- **Formal Route**: proper solid line (not just a bar)
+- **Phantom Corridor**: animated gradient bar mimicking the dashed flow
+- **Official Gate**: blue square with white border (matching the point on map)
+- **Phantom POE**: gold circle with CSS pulse animation matching the Cesium pulse
+- **IOM FMP**: cyan circle with subtle ring (matching the flow ring on map)
+- **Gap Zone**: semi-transparent red rectangle with border
 
-**MONITORED** section:
-- Solid blue line — "Formal Route"
-- Blue diamond — "Official Gate"
-- Cyan circle — "IOM FMP"
+Add a small "coverage gap" visual indicator showing 29.4% vs 70.6%.
 
-**UNMONITORED** section:
-- Animated dashed line (by risk color) — "Phantom Corridor"
-- Gold pulsing circle — "Phantom POE"
-- Red zone — "Gap Zone"
+### 3. Densify corridor coordinates with geodesic interpolation
+Add a `densifyLine()` utility function in `drawAllCorridors.ts` that takes a sparse coordinate array and interpolates additional points along geodesic arcs (great-circle paths). Target ~30-50 points per corridor so lines follow the globe curvature naturally instead of appearing as straight segments between 3-5 waypoints.
 
-Add coverage stat: "Avg formal coverage: 29.4%"
+Apply to both PHANTOM and FORMAL LineString features before converting to Cesium positions.
 
-### 6. Update `CorridorDetailSidebar.tsx`
-When a corridor is selected, show its `formal_poe_coverage` percentage and `gap_km` prominently. Display the formal counterpart info (matching `F-{id}` route) alongside the phantom data.
+---
 
-## Files
+## Files to modify
 
-| File | Action |
+| File | Change |
 |---|---|
-| `public/data/corridors_paired.geojson` | Copy from upload |
-| `public/data/corridors_meta.json` | Regenerate from 17 phantom corridors |
-| `src/hooks/cesium/drawAllCorridors.ts` | Rewrite — unified renderer for all feature types |
-| `src/hooks/useCesiumMap.ts` | Simplify — single draw call replaces three |
-| `src/components/dashboard/MapLegend.tsx` | Reorganize into MONITORED / UNMONITORED sections |
-| `src/components/dashboard/CorridorDetailSidebar.tsx` | Add coverage gap display |
+| `public/data/corridors_paired.geojson` | Add movement estimate properties to all 17 PHANTOM + 17 FORMAL features |
+| `src/hooks/cesium/drawAllCorridors.ts` | Add `densifyLine()` function; enrich tooltip HTML with movement/market/health data |
+| `src/components/dashboard/MapLegend.tsx` | Redesign legend shapes to match actual Cesium rendering |
 
 ## Technical details
 
-The GeoJSON `route_type` field drives all rendering decisions:
-- `PHANTOM` → dashed risk-colored polyline stack
-- `FORMAL` → solid blue polyline
-- `NODE` → point with `node_type` sub-styling
-- `FORMAL_GATE` → blue diamond point
-- `IOM_FMP` → cyan circle point, flow-scaled
-- `PHANTOM_POE` → gold pulsing point
+**Geodesic densification**: For each pair of consecutive coordinates, compute intermediate points along the great-circle arc using spherical interpolation. For a corridor with N original points, insert enough intermediates to reach ~40 total points. This makes lines curve naturally on the 3D globe.
 
-The CZML file is available but not needed — CesiumJS entity API handles everything the CZML would provide, and keeps the rendering consistent with existing patterns.
+```text
+Before:  A ——————————— B ——————————— C   (3 points, straight)
+After:   A · · · · · · B · · · · · · C   (40 points, curved)
+```
+
+**Movement data structure** (added to GeoJSON properties):
+```json
+{
+  "est_monthly_people": 35000,
+  "est_vehicles_day": 0,
+  "est_canoe_crossings_day": 45,
+  "market_days": "Mon/Thu",
+  "key_commodities": "fish, cassava, fuel",
+  "conflict_factor": "M23 displacement",
+  "health_risk": "mpox, cholera",
+  "nearest_health_km": 67
+}
+```
 
