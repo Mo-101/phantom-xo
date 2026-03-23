@@ -378,28 +378,34 @@ function drawPhantomCorridor(ctx: CesiumDrawContext, feature: any) {
       segCoords.flatMap((c) => [c[0], c[1]])
     );
 
-    // Smooth filled ribbon — meter-based width, no pixel seams
+    // Smooth filled ribbon — 6km band, clamped to terrain
     ctx.addEntity(`corr-${id}-band-${i}`, {
       corridor: {
         positions,
-        width: 8000,
+        width: 6000,
         material: cesiumColor.withAlpha(0.92),
         cornerType: Cesium.CornerType.MITERED,
         height: 0,
+        extrudedHeight: 0,
         outline: false,
       },
+      // @ts-ignore — CorridorGraphics heightReference
+      heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
     });
 
-    // Glow halo — wider, translucent
+    // Glow halo — 14km, translucent
     ctx.addEntity(`corr-${id}-glow-${i}`, {
       corridor: {
         positions,
-        width: 16000,
+        width: 14000,
         material: cesiumColor.withAlpha(0.15),
         cornerType: Cesium.CornerType.MITERED,
         height: 0,
+        extrudedHeight: 0,
         outline: false,
       },
+      // @ts-ignore — CorridorGraphics heightReference
+      heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
     });
   }
 
