@@ -121,29 +121,64 @@ const MapLegend = ({
               </div>
             )}
 
-            {/* Toggles */}
-            <div className="pt-2 mt-1.5 border-t border-border space-y-1.5">
-              <label className="flex items-center gap-2 text-sm font-mono text-muted-foreground cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={officialPOEsVisible}
-                  onChange={(e) => onTogglePOEs(e.target.checked)}
-                  className="w-3.5 h-3.5 rounded border-border accent-[hsl(217,91%,60%)]"
-                />
-                <span>Show Official POEs</span>
-              </label>
-              {onToggleEvidence && (
-                <label className="flex items-center gap-2 text-sm font-mono text-muted-foreground cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={evidenceVisible}
-                    onChange={onToggleEvidence}
-                    className="w-3.5 h-3.5 rounded border-border accent-[hsl(var(--phantom-green))]"
-                  />
-                  <span>Show Evidence Signals</span>
-                </label>
-              )}
-            </div>
+            {/* Layer controls */}
+            {onToggleLayer && (
+              <div className="pt-2 mt-1.5 border-t border-border">
+                <button
+                  onClick={() => setLayersExpanded(!layersExpanded)}
+                  className="w-full flex items-center justify-between text-xs font-mono text-muted-foreground uppercase tracking-wider mb-1.5 hover:text-foreground transition-colors"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <Layers className="w-3 h-3" />
+                    Layers
+                  </span>
+                  {layersExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                </button>
+                {layersExpanded && (
+                  <div className="space-y-1">
+                    {LAYER_DEFS.map((layer) => {
+                      const isOn = layer.key === "officialPOEs"
+                        ? officialPOEsVisible
+                        : layer.key === "evidence"
+                        ? evidenceVisible
+                        : (layerVisibility[layer.key] ?? true);
+                      return (
+                        <button
+                          key={layer.key}
+                          onClick={() => {
+                            if (layer.key === "officialPOEs") {
+                              onTogglePOEs(!officialPOEsVisible);
+                            } else if (layer.key === "evidence") {
+                              onToggleEvidence?.();
+                            } else {
+                              onToggleLayer(layer.key);
+                            }
+                          }}
+                          className="w-full flex items-center gap-2 px-1.5 py-1 rounded hover:bg-white/5 transition-colors group"
+                        >
+                          <div
+                            className="w-2.5 h-2.5 rounded-sm flex-shrink-0 border"
+                            style={{
+                              backgroundColor: isOn ? layer.color : "transparent",
+                              borderColor: layer.color,
+                              opacity: isOn ? 1 : 0.3,
+                            }}
+                          />
+                          <span className={`text-xs font-mono flex-1 text-left ${isOn ? "text-foreground/80" : "text-muted-foreground/40 line-through"}`}>
+                            {layer.label}
+                          </span>
+                          {isOn ? (
+                            <Eye className="w-3 h-3 text-muted-foreground/40 opacity-0 group-hover:opacity-100 transition-opacity" />
+                          ) : (
+                            <EyeOff className="w-3 h-3 text-muted-foreground/40 opacity-0 group-hover:opacity-100 transition-opacity" />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Cascade controls */}
             {onStartCascade && corridorsMeta.length > 0 && (
