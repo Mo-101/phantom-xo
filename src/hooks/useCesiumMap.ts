@@ -221,7 +221,42 @@ export function useCesiumMap(containerRef: React.RefObject<HTMLDivElement | null
     const newVisible = !evidenceVisible;
     toggleEvidenceEntities(viewer, evidenceIdsRef.current, newVisible);
     setEvidenceVisible(newVisible);
+    setLayerVisibility((prev) => ({ ...prev, evidence: newVisible }));
   }, [evidenceVisible]);
+
+  // Generic layer toggle
+  const toggleLayer = useCallback((layerName: string) => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+
+    const newVisible = !layerVisibility[layerName];
+    let ids: string[] = [];
+
+    switch (layerName) {
+      case "corridors":
+        ids = corridorEntityIdsRef.current;
+        break;
+      case "borders":
+        ids = borderIdsRef.current;
+        break;
+      case "labels":
+        ids = labelIdsRef.current;
+        break;
+      case "evidence":
+        toggleEvidenceEntities(viewer, evidenceIdsRef.current, newVisible);
+        setEvidenceVisible(newVisible);
+        setLayerVisibility((prev) => ({ ...prev, evidence: newVisible }));
+        return;
+      default:
+        return;
+    }
+
+    for (const id of ids) {
+      const entity = viewer.entities.getById(id);
+      if (entity) entity.show = newVisible;
+    }
+    setLayerVisibility((prev) => ({ ...prev, [layerName]: newVisible }));
+  }, [layerVisibility]);
 
   const startCascade = useCallback((corridorId: string) => {
     cascadeEngineRef.current?.start(corridorId, (s) => {
