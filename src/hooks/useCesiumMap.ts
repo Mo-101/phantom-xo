@@ -178,6 +178,7 @@ export function useCesiumMap(containerRef: React.RefObject<HTMLDivElement | null
       const [meta] = await Promise.all([
         drawAllCorridors(ctx),
         drawBorders(ctx),
+        drawGeoLabels(ctx),
       ]);
       setCorridorsMeta(meta);
 

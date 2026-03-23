@@ -1,16 +1,15 @@
 import * as Cesium from "cesium";
-import { type CesiumDrawContext, T } from "./types";
+import { type CesiumDrawContext } from "./types";
 
 /**
  * Draw admin-0 (country) boundary lines on the globe.
  * Uses Natural Earth 110m GeoJSON from a public CDN.
- * Renders subtle boundary polylines so analysts can see country edges.
+ * Renders solid white boundary polylines.
  */
 
 const GEOJSON_URL =
   "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_boundary_lines_land.geojson";
 
-// Focus region bounding box (Africa + Middle East + Horn)
 const BOUNDS = { minLat: -40, maxLat: 40, minLng: -20, maxLng: 60 };
 
 function inBounds(coords: [number, number][]): boolean {
@@ -25,8 +24,7 @@ export async function drawBorders(ctx: CesiumDrawContext): Promise<void> {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const gj = await res.json();
 
-    const borderColor = Cesium.Color.fromCssColorString("#9CA3AF").withAlpha(0.45);
-    const glowColor = Cesium.Color.fromCssColorString("#9CA3AF").withAlpha(0.08);
+    const borderColor = Cesium.Color.WHITE.withAlpha(0.6);
 
     let idx = 0;
     for (const feature of gj.features) {
@@ -44,27 +42,12 @@ export async function drawBorders(ctx: CesiumDrawContext): Promise<void> {
         const flat = coords.flatMap(([lng, lat]) => [lng, lat]);
         const positions = Cesium.Cartesian3.fromDegreesArray(flat);
 
-        // Glow layer
-        ctx.addEntity(`border-glow-${idx}`, {
-          polyline: {
-            positions,
-            clampToGround: true,
-            width: 6,
-            material: glowColor,
-          },
-        });
-
-        // Crisp boundary line
         ctx.addEntity(`border-line-${idx}`, {
           polyline: {
             positions,
             clampToGround: true,
-            width: 3,
-            material: new Cesium.PolylineDashMaterialProperty({
-              color: borderColor,
-              dashLength: 5,
-              dashPattern: 0b1111111100000000,
-            }),
+            width: 2,
+            material: new Cesium.ColorMaterialProperty(borderColor),
           },
         });
 
