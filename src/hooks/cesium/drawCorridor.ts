@@ -9,23 +9,8 @@ import { T, type CesiumDrawContext } from "./types";
  */
 export function drawCorridor(ctx: CesiumDrawContext, corridor: CorridorTrack) {
   const positions = corridor.pathCoords
-    ? Cesium.Cartesian3.fromDegreesArray(
-        corridor.pathCoords.flatMap((p) => [p.lng, p.lat])
-      )
-    : Cesium.Cartesian3.fromDegreesArray([
-        corridor.startLng, corridor.startLat,
-        corridor.endLng, corridor.endLat,
-      ]);
-
-  // Layer 3: Glow ribbon — wide, low alpha
-  ctx.addEntity(`${corridor.id}-glow`, {
-    polyline: {
-      positions,
-      clampToGround: true,
-      width: 24,
-      material: Cesium.Color.fromCssColorString(T.green).withAlpha(0.08),
-    },
-  });
+    ? Cesium.Cartesian3.fromDegreesArray(corridor.pathCoords.flatMap((p) => [p.lng, p.lat]))
+    : Cesium.Cartesian3.fromDegreesArray([corridor.startLng, corridor.startLat, corridor.endLng, corridor.endLat]);
 
   // Layer 2: Animated dashed flow using CallbackProperty for dash offset
   let dashOffset = 0;
@@ -43,8 +28,8 @@ export function drawCorridor(ctx: CesiumDrawContext, corridor: CorridorTrack) {
           // Rotate through 16-bit dash patterns to simulate flow
           dashOffset = (dashOffset + 1) % 16;
           // Shift the bit pattern to create movement
-          const base = 0xFF00;
-          return ((base << dashOffset) | (base >>> (16 - dashOffset))) & 0xFFFF;
+          const base = 0xff00;
+          return ((base << dashOffset) | (base >>> (16 - dashOffset))) & 0xffff;
         }, false) as any,
       }),
     },
