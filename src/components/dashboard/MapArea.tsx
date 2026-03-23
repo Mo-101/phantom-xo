@@ -3,6 +3,7 @@ import { Activity, Globe } from "lucide-react";
 import * as Cesium from "cesium";
 import { useCesiumMap } from "@/hooks/useCesiumMap";
 import { MapLegend } from "./MapLegend";
+import { CorridorOverlay } from "./CorridorOverlay";
 
 interface MapAreaProps {
   onMapReady?: (handlers: ReturnType<typeof useCesiumMap>) => void;
@@ -11,7 +12,31 @@ interface MapAreaProps {
 const MapArea = ({ onMapReady }: MapAreaProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const cesium = useCesiumMap(containerRef);
-  const [coords, setCoords] = useState({ lat: -1.5, lng: 34.0, alt: 3000 });
+  const [coords, setCoords] = useState({ lat: -1.5, lng: 34, alt: 3000 });
+
+  // Add a clipping region based on the loaded project footprint
+  useEffect(() => {
+    if (!cesium.mapReady || !cesium.viewer.current) return;
+    const viewer = cesium.viewer.current;
+    if (viewer.isDestroyed()) return;
+
+    const now = Cesium.JulianDate.now();
+    const polygons = viewer.entities.values.flatMap((entity) => {
+      const hierarchy = entity.polygon?.hierarchy?.getValue(now);
+      const positions = hierarchy instanceof Cesium.PolygonHierarchy ? hierarchy.positions : [];
+      return positions.length ? [new Cesium.ClippingPolygon({ positions })] : [];
+    });
+
+    viewer.scene.globe.clippingPolygons = polygons.length
+      ? new Cesium.ClippingPolygonCollection({ polygons })
+      : undefined;
+
+    return () => {
+      if (!viewer.isDestroyed()) {
+        viewer.scene.globe.clippingPolygons = undefined;
+      }
+    };
+  }, [cesium.mapReady, cesium.viewer, cesium.corridorsMeta]);
 
   // Notify parent when map is ready
   useEffect(() => {
@@ -121,7 +146,11 @@ const MapArea = ({ onMapReady }: MapAreaProps) => {
           onToggleEvidence={cesium.toggleEvidence}
           cascadeActive={cesium.cascadeState?.active ?? false}
           onStartCascade={cesium.startCascade}
+          onScrub={cesium.scrubCascade}
           onStopCascade={cesium.stopCascade}
+          scrubberPosition={cesium.scrubberPosition}
+          currentDate={cesium.currentCascadeDate}
+          temporalRange={cesium.temporalRange}
           layerVisibility={cesium.layerVisibility}
           onToggleLayer={cesium.toggleLayer}
         />

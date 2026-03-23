@@ -14,7 +14,7 @@ import { drawEvidenceLayer, toggleEvidenceEntities } from "./cesium/drawEvidence
 import { drawBorders } from "./cesium/drawBorders";
 import { drawGeoLabels } from "./cesium/drawGeoLabels";
 import { createCascadeEngine, type CascadeState } from "./cesium/cascadeEngine";
-import type { EvidenceSignal } from "./cesium/drawEvidenceLayer";
+import { getTemporalRange, type EvidenceSignal, type TemporalRange } from "@/lib/temporalAdapter";
 
 export function useCesiumMap(containerRef: React.RefObject<HTMLDivElement | null>) {
   const viewerRef = useRef<Cesium.Viewer | null>(null);
@@ -29,6 +29,7 @@ export function useCesiumMap(containerRef: React.RefObject<HTMLDivElement | null
   const [corridorsLoaded, setCorridorsLoaded] = useState(false);
   const [evidenceVisible, setEvidenceVisible] = useState(false);
   const [cascadeState, setCascadeState] = useState<CascadeState | null>(null);
+  const [temporalRange, setTemporalRange] = useState<TemporalRange | null>(null);
   const [selectedCorridorId, setSelectedCorridorId] = useState<string | null>(null);
   const evidenceIdsRef = useRef<string[]>([]);
   const evidenceDataRef = useRef<EvidenceSignal[]>([]);
@@ -148,6 +149,7 @@ export function useCesiumMap(containerRef: React.RefObject<HTMLDivElement | null
     evidenceDataRef.current = [];
     cascadeEngineRef.current = null;
     setCascadeState(null);
+    setTemporalRange(null);
     setEvidenceVisible(false);
   }, []);
 
@@ -187,15 +189,31 @@ export function useCesiumMap(containerRef: React.RefObject<HTMLDivElement | null
     if (!ctx) return;
 
     try {
+      const viewer = viewerRef.current;
+      if (viewer && !viewer.isDestroyed() && !viewer.scene.globe.tilesLoaded) {
+        await new Promise<void>((resolve) => {
+          const onProgress = () => {
+            if (viewer.isDestroyed()) {
+              viewer.scene.globe.tileLoadProgressEvent.removeEventListener(onProgress);
+              resolve();
+              return;
+            }
+            if (viewer.scene.globe.tilesLoaded) {
+              viewer.scene.globe.tileLoadProgressEvent.removeEventListener(onProgress);
+              resolve();
+            }
+          };
+
+          viewer.scene.globe.tileLoadProgressEvent.addEventListener(onProgress);
+          onProgress();
+        });
+      }
+
+      const borderIds = await drawBorders(ctx);
+      const labelIds = await drawGeoLabels(ctx);
       const corridorStartLen = ctx.entityIds.length;
-      const [meta, borderIds, labelIds] = await Promise.all([
-        drawAllCorridors(ctx).then((m) => {
-          corridorEntityIdsRef.current = ctx.entityIds.slice(corridorStartLen);
-          return m;
-        }),
-        drawBorders(ctx),
-        drawGeoLabels(ctx),
-      ]);
+      const meta = await drawAllCorridors(ctx);
+      corridorEntityIdsRef.current = ctx.entityIds.slice(corridorStartLen);
       borderIdsRef.current = borderIds;
       labelIdsRef.current = labelIds;
       setCorridorsMeta(meta);
@@ -203,6 +221,7 @@ export function useCesiumMap(containerRef: React.RefObject<HTMLDivElement | null
       const { data, entityIds } = await drawEvidenceLayer(ctx);
       evidenceIdsRef.current = entityIds;
       evidenceDataRef.current = data;
+      setTemporalRange(getTemporalRange(data));
 
       const viewer = viewerRef.current;
       if (viewer) {
@@ -264,6 +283,13 @@ export function useCesiumMap(containerRef: React.RefObject<HTMLDivElement | null
     });
   }, []);
 
+  const scrubCascade = useCallback((corridorId: string, position: number) => {
+    if (!corridorId) return;
+    cascadeEngineRef.current?.seek(corridorId, position, (s) => {
+      setCascadeState({ ...s });
+    });
+  }, []);
+
   const stopCascade = useCallback(() => {
     cascadeEngineRef.current?.stop();
     cascadeEngineRef.current?.hideAll();
@@ -320,7 +346,11 @@ export function useCesiumMap(containerRef: React.RefObject<HTMLDivElement | null
     evidenceVisible,
     toggleEvidence,
     cascadeState,
+    temporalRange,
+    scrubberPosition: cascadeState?.progress ?? 0,
+    currentCascadeDate: cascadeState?.currentDate ?? temporalRange?.min ?? null,
     startCascade,
+    scrubCascade,
     stopCascade,
     selectedCorridorId,
     setSelectedCorridorId,

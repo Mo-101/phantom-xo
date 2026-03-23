@@ -18,7 +18,11 @@ interface MapLegendProps {
   onToggleEvidence?: () => void;
   cascadeActive?: boolean;
   onStartCascade?: (corridorId: string) => void;
+  onScrub?: (corridorId: string, position: number) => void;
   onStopCascade?: () => void;
+  scrubberPosition?: number;
+  currentDate?: Date | null;
+  temporalRange?: { min: Date; max: Date } | null;
   layerVisibility?: Record<string, boolean>;
   onToggleLayer?: (layer: string) => void;
 }
@@ -40,13 +44,24 @@ const MapLegend = ({
   onToggleEvidence,
   cascadeActive = false,
   onStartCascade,
+  onScrub,
   onStopCascade,
+  scrubberPosition = 0,
+  currentDate,
+  temporalRange,
   layerVisibility = {},
   onToggleLayer,
 }: MapLegendProps) => {
   const [expanded, setExpanded] = useState(true);
   const [layersExpanded, setLayersExpanded] = useState(true);
   const [cascadeCorridorId, setCascadeCorridorId] = useState("");
+  const activeDate = currentDate ?? temporalRange?.min ?? null;
+  const rangeStart = temporalRange?.min
+    ? temporalRange.min.toLocaleDateString("en-GB", { month: "short", year: "numeric" })
+    : "Apr 2023";
+  const rangeEnd = temporalRange?.max
+    ? temporalRange.max.toLocaleDateString("en-GB", { month: "short", year: "numeric" })
+    : "Jan 2025";
 
   return (
     <div className="absolute bottom-4 right-4 z-10 animate-fade-in">
@@ -217,6 +232,26 @@ const MapLegend = ({
                       Stop
                     </button>
                   )}
+                </div>
+                <div className="pt-1">
+                  <div className="text-[10px] font-mono text-muted-foreground mb-1">
+                    {activeDate
+                      ? activeDate.toLocaleDateString("en-GB", { month: "short", year: "numeric" })
+                      : rangeStart}
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={scrubberPosition}
+                    onChange={(e) => onScrub?.(cascadeCorridorId, Number(e.target.value))}
+                    disabled={!cascadeCorridorId}
+                    className="w-full accent-red-500 disabled:opacity-40"
+                  />
+                  <div className="flex justify-between mt-1 text-[9px] font-mono text-muted-foreground">
+                    <span>{rangeStart}</span>
+                    <span>{rangeEnd}</span>
+                  </div>
                 </div>
               </div>
             )}
