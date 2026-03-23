@@ -392,7 +392,8 @@ function drawPhantomCorridor(ctx: CesiumDrawContext, feature: any) {
       // @ts-ignore — CorridorGraphics heightReference
       heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
     });
-    
+  } // close batch for-loop
+
   // ── LAYER 2: Flowing white dash — single entity ──
   let dashOffset = 0;
   ctx.addEntity(`corr-${id}-flow`, {
