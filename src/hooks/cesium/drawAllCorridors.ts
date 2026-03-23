@@ -631,18 +631,17 @@ function drawPhantomPoe(ctx: CesiumDrawContext, feature: any) {
   const name = props.name || "Phantom POE";
   const gold = Cesium.Color.fromCssColorString("#FFD700");
 
-  // Pulsing outer ring
-  let pulsePhase = 0;
+  // Pulsing outer ring — use shared value to avoid semiMajor < semiMinor race
+  let pulseRadius = 3000;
+  const pulseCallback = new Cesium.CallbackProperty(() => {
+    pulseRadius = 3000 + Math.sin(Date.now() * 0.003) * 1500;
+    return pulseRadius;
+  }, false);
   ctx.addEntity(`ppoe-${poeId}-pulse`, {
     position: Cesium.Cartesian3.fromDegrees(lng, lat),
     ellipse: {
-      semiMinorAxis: new Cesium.CallbackProperty(() => {
-        pulsePhase = (pulsePhase + 0.03) % (Math.PI * 2);
-        return 3000 + Math.sin(pulsePhase) * 1500;
-      }, false),
-      semiMajorAxis: new Cesium.CallbackProperty(() => {
-        return 3000 + Math.sin(pulsePhase) * 1500;
-      }, false),
+      semiMinorAxis: pulseCallback,
+      semiMajorAxis: pulseCallback,
       material: gold.withAlpha(0.1),
       outline: true,
       outlineColor: gold.withAlpha(0.3),
