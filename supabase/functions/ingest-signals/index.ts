@@ -217,7 +217,7 @@ async function ingestDTM(
 
 // ─── DHIS2 Provider ────────────────────────────────────────
 async function ingestDHIS2(
-  db: ReturnType<typeof createClient>,
+  db: any,
   runId: string,
 ): Promise<{ rawCount: number; signalCount: number; errors: string[] }> {
   const baseUrl = Deno.env.get("DHIS2_BASE_URL");
