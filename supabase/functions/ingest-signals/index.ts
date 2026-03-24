@@ -35,7 +35,7 @@ const MIN_TRUTH = 0.80;
 
 // ─── ACLED Provider ────────────────────────────────────────
 async function ingestACLED(
-  db: ReturnType<typeof createClient>,
+  db: any,
   runId: string,
   daysBack = 30,
 ): Promise<{ rawCount: number; signalCount: number; errors: string[] }> {
