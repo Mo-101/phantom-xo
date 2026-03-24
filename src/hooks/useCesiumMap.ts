@@ -114,14 +114,10 @@ export function useCesiumMap(containerRef: React.RefObject<HTMLDivElement | null
       viewer.scene.backgroundColor = Cesium.Color.fromCssColorString(T.bg);
       viewer.scene.globe.enableLighting = false;
       viewer.scene.globe.showGroundAtmosphere = false;
-      if (viewer.scene.skyAtmosphere) viewer.scene.skyAtmosphere.show = false;
-      if (viewer.scene.skyBox) viewer.scene.skyBox.show = false;
-      if (viewer.scene.sun) viewer.scene.sun.show = false;
-      if (viewer.scene.moon) viewer.scene.moon.show = false;
 
+      // 2D Mercator view — center on East Africa
       viewer.camera.setView({
-        destination: Cesium.Cartesian3.fromDegrees(34.0, -1.5, 3_000_000),
-        orientation: { heading: 0, pitch: Cesium.Math.toRadians(-60), roll: 0 },
+        destination: Cesium.Cartesian3.fromDegrees(34.0, -1.5, 5_000_000),
       });
 
       viewerRef.current = viewer;
