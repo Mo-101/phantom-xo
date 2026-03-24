@@ -144,7 +144,7 @@ async function ingestACLED(
 
 // ─── DTM Provider ──────────────────────────────────────────
 async function ingestDTM(
-  db: ReturnType<typeof createClient>,
+  db: any,
   runId: string,
 ): Promise<{ rawCount: number; signalCount: number; errors: string[] }> {
   const apiKey = Deno.env.get("DTM_API_KEY");
