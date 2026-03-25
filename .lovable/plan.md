@@ -1,120 +1,51 @@
 
 
-# Migrate Map Engine: CesiumJS to Mapbox GL JS
+# Wire Neon-backed POE Layer
 
 ## Overview
+Replace the empty Supabase POE query with Neon's `poe_corridors` table. Three files to create/edit, one line-level export fix.
 
-Replace CesiumJS (3D globe engine — heavy, broken corridor rendering) with Mapbox GL JS (native line-gradient support, smooth curves, lighter). The user's working script provides the foundation. We keep all existing data layers and UI integrations.
-
-## Architecture
-
-```text
-BEFORE                              AFTER
-──────                              ─────
-cesium (npm) + vite-plugin-cesium    mapbox-gl (npm) + @turf/turf
-useCesiumMap.ts                      useMapboxMap.ts
-hooks/cesium/*.ts (13 files)         hooks/mapbox/*.ts (6 files)
-CesiumDrawContext                    MapboxDrawContext (map instance)
-Cesium entities                      Mapbox sources + layers
+## 1. Install dependency
+```
+npm install @neondatabase/serverless
 ```
 
-## Changes
+## 2. Create `src/lib/neon.ts`
+Neon serverless client reading `VITE_NEON_DATABASE_URL` (already in `.env`). Exports `queryNeon<T>(query, params)` — returns `T[]`, catches errors gracefully.
 
-### 1. Package changes
-- **Remove**: `cesium`, `vite-plugin-cesium`
-- **Add**: `mapbox-gl`, `@turf/turf`, `@types/mapbox-gl` (dev)
-- **Update** `vite.config.ts`: remove `cesium()` plugin import
+## 3. Rewrite `src/hooks/mapbox/drawOfficialPOEs.ts`
+- Replace `supabase` import with `queryNeon` from `@/lib/neon`
+- Query `poe_corridors` with `UNION ALL` for start + end nodes
+- Deduplicate by `name + lat.toFixed(3) + lng.toFixed(3)` → ~28 unique nodes
+- Cleanup existing layers/source before re-adding (no `ctx.sourceIds` — just `map`)
+- Three layers:
+  - `official-poes-outline` — outer ring, stroke color from risk class
+  - `official-poes-circle` — inner fill, green (start) / orange (end)
+  - `official-poes-label` — name + country text at zoom 6+
+- Export `POE_LAYER_IDS` from this file (3 IDs)
 
-### 2. New hook: `src/hooks/useMapboxMap.ts`
-Core map hook replacing `useCesiumMap.ts`. Initializes Mapbox with:
-- Style: `mapbox://styles/mapbox/standard-satellite`
-- Center: `[34.0, -1.5]`, zoom 4 (East Africa)
-- Access token from the user's script (public key)
-- On `load` event: calls all draw functions, sets `mapReady`
-- Exposes same API surface: `mapReady`, `corridorsMeta`, `layerVisibility`, `toggleLayer`, `selectedCorridorId`, `handleMapQuery`, cascade controls, etc.
-- Click handler: query rendered features on corridor layers to set `selectedCorridorId`
-- Camera coordinate readout via `moveend` event
+## 4. Remove `POE_LAYER_IDS` from `src/hooks/mapbox/drawCorridors.ts`
+Delete line 405: `export const POE_LAYER_IDS = ["official-poes-circle", "official-poes-labels"];`
 
-### 3. New drawing modules in `src/hooks/mapbox/`
+## 5. Update import in `src/hooks/useMapboxMap.ts`
+```diff
+- import { drawCorridors, CORRIDOR_LAYER_IDS, BORDER_LAYER_IDS, LABEL_LAYER_IDS, POE_LAYER_IDS, type CoverageStats } from "./mapbox/drawCorridors";
++ import { drawCorridors, CORRIDOR_LAYER_IDS, BORDER_LAYER_IDS, LABEL_LAYER_IDS, type CoverageStats } from "./mapbox/drawCorridors";
++ import { drawOfficialPOEs, POE_LAYER_IDS } from "./mapbox/drawOfficialPOEs";
+```
+(Note: `drawOfficialPOEs` is already imported on line 11 — just add `POE_LAYER_IDS` to that import and remove it from the drawCorridors import.)
 
-**`drawCorridors.ts`** — Temporal corridors + deviations
-- Source `corridors-temporal` from `/data/corridors_temporal.geojson` with `lineMetrics: true`
-- Layer: `line` type with `line-gradient` interpolation (blue → cyan → lime → yellow → red based on `line-progress`)
-- Width: 5px, opacity from feature `opacity` property, round caps/joins
-- Deviation source from `/data/deviation/all_deviations.geojson` — dashed red line layer
-- Animated point along formal routes using turf (from user's script)
-- Formal routes from `/data/formal/all_formal_routes.geojson` — red line layer
-- Midpoint labels as symbol layer with `text-field: ["get", "name"]`
-- Start/end node markers as circle + symbol layers
-- Returns `CorridorMeta[]` from corridors_meta.json
-
-**`drawBorders.ts`** — Admin boundaries
-- Source from Natural Earth GeoJSON
-- Solid white line, width 2, opacity 0.6
-
-**`drawGeoLabels.ts`** — Three-tier labels
-- Countries: symbol layer, `minzoom: 2`, `maxzoom: 6`, bold white text
-- Admin-1: symbol layer, `minzoom: 5`, `maxzoom: 8`, gray text
-- Cities: symbol layer with circle marker, `minzoom: 7`
-
-**`drawEvidenceLayer.ts`** — Evidence signals
-- GeoJSON source from temporal adapter data
-- Circle layer (initially invisible) with data-driven radius and color
-- Symbol layer for labels
-- Toggle via `setLayoutProperty` visibility
-
-**`drawOfficialPOEs.ts`** — from database query
-- GeoJSON source built from Supabase corridor_nodes query
-- Circle + symbol layers for blue diamond markers
-
-**`cascadeEngine.ts`** — Minimal adaptation
-- Instead of Cesium entity show/hide, use `setFilter` on evidence layer to show signals by ID
-- Same start/stop/seek API
-
-### 4. Update `MapArea.tsx`
-- Remove Cesium imports, use `useMapboxMap` instead
-- Container ref stays the same
-- Remove clipping polygon logic (already removed)
-- Keep coordinate readout, legend, cascade HUD
-- Click handler via Mapbox `queryRenderedFeatures`
-
-### 5. Update `MapLegend.tsx`
-- No changes needed — it already works with layer visibility toggles via callbacks
-
-### 6. Update `Index.tsx` and types
-- `MapParams` type: rename `CesiumCameraTarget` to `CameraTarget` (remove Cesium prefix)
-- `handleMapQuery` uses `map.flyTo` instead of Cesium camera
-
-### 7. Cleanup
-- Delete all files in `src/hooks/cesium/` (13 files)
-- Delete `src/hooks/useCesiumMap.ts`
-- Remove cesium type references from `phantom.ts`
+## 6. Add `text` color to `src/hooks/mapbox/types.ts`
+Add `text: "#E5E7EB"` to the `T` object for label color consistency.
 
 ## Files Summary
 
 | Action | File |
 |--------|------|
-| Create | `src/hooks/useMapboxMap.ts` |
-| Create | `src/hooks/mapbox/drawCorridors.ts` |
-| Create | `src/hooks/mapbox/drawBorders.ts` |
-| Create | `src/hooks/mapbox/drawGeoLabels.ts` |
-| Create | `src/hooks/mapbox/drawEvidenceLayer.ts` |
-| Create | `src/hooks/mapbox/drawOfficialPOEs.ts` |
-| Create | `src/hooks/mapbox/cascadeEngine.ts` |
-| Create | `src/hooks/mapbox/types.ts` |
-| Edit | `src/components/dashboard/MapArea.tsx` |
-| Edit | `src/pages/Index.tsx` |
-| Edit | `src/types/phantom.ts` |
-| Edit | `vite.config.ts` |
-| Edit | `package.json` |
-| Delete | `src/hooks/useCesiumMap.ts` |
-| Delete | `src/hooks/cesium/*` (13 files) |
-
-## Key Technical Decisions
-
-- **Mapbox token**: Use the public token from the user's script directly in code (it's a publishable key)
-- **Line gradients**: Native Mapbox `line-gradient` expression — no batching, no seams, smooth curves out of the box
-- **Layer toggle**: `map.setLayoutProperty(layerId, 'visibility', 'visible'|'none')`
-- **Animated point**: Uses `@turf/turf` for `along()` and `lineDistance()` with `requestAnimationFrame`
-- **Cascade engine**: Filters evidence layer by feature IDs instead of toggling Cesium entity visibility
+| Install | `@neondatabase/serverless` |
+| Create | `src/lib/neon.ts` |
+| Rewrite | `src/hooks/mapbox/drawOfficialPOEs.ts` |
+| Edit (1 line delete) | `src/hooks/mapbox/drawCorridors.ts` |
+| Edit (1 line change) | `src/hooks/useMapboxMap.ts` |
+| Edit (1 property add) | `src/hooks/mapbox/types.ts` |
 
