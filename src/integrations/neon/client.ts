@@ -1,0 +1,81 @@
+/**
+ * MoStar Phantom XO — Neon Integration Client
+ * moscript://codex/v1
+ * sass: "One database. One truth. No middlemen."
+ *
+ * Canonical Neon connection — all database access flows through here.
+ * Replaces the former Supabase client entirely.
+ */
+
+import { neon } from "@neondatabase/serverless";
+
+// ── Connection ──────────────────────────────────────────────────────
+const DATABASE_URL = import.meta.env.VITE_NEON_DATABASE_URL as string | undefined;
+
+if (!DATABASE_URL) {
+  console.warn("[neon] VITE_NEON_DATABASE_URL not set — database features disabled");
+}
+
+const sql = DATABASE_URL ? neon(DATABASE_URL) : null;
+
+// ── Generic Query Helper ────────────────────────────────────────────
+export async function queryNeon<T = Record<string, unknown>>(
+  query: string,
+  params: unknown[] = []
+): Promise<T[]> {
+  if (!sql) {
+    console.warn("[neon] No database connection");
+    return [];
+  }
+  try {
+    const result = await sql(query, params);
+    return result as T[];
+  } catch (err) {
+    console.error("[neon] Query error:", err);
+    return [];
+  }
+}
+
+// ── Execute (for mutations — INSERT/UPDATE/DELETE) ──────────────────
+export async function execNeon(
+  query: string,
+  params: unknown[] = []
+): Promise<{ rowCount: number; error: string | null }> {
+  if (!sql) {
+    return { rowCount: 0, error: "No database connection" };
+  }
+  try {
+    const result = await sql(query, params);
+    return { rowCount: Array.isArray(result) ? result.length : 0, error: null };
+  } catch (err) {
+    console.error("[neon] Exec error:", err);
+    return { rowCount: 0, error: (err as Error).message };
+  }
+}
+
+// ── Connection status ───────────────────────────────────────────────
+export function isNeonConnected(): boolean {
+  return sql !== null;
+}
+
+// ── Active data lane helper ─────────────────────────────────────────
+let _activeLaneCache: { id: string; ts: number } | null = null;
+const LANE_CACHE_TTL = 30_000; // 30s
+
+export async function getActiveLaneId(): Promise<string | null> {
+  if (_activeLaneCache && Date.now() - _activeLaneCache.ts < LANE_CACHE_TTL) {
+    return _activeLaneCache.id;
+  }
+  const rows = await queryNeon<{ id: string }>(
+    `SELECT id FROM data_lanes WHERE is_active = true LIMIT 1`
+  );
+  const id = rows[0]?.id ?? null;
+  if (id) _activeLaneCache = { id, ts: Date.now() };
+  return id;
+}
+
+export function clearLaneCache() {
+  _activeLaneCache = null;
+}
+
+export { sql };
