@@ -1,12 +1,20 @@
+/**
+ * MoStar Phantom XO — Backend Endpoints
+ * moscript://codex/v1
+ * sass: "All roads lead to Neon now."
+ *
+ * API endpoint configuration — Supabase removed, Neon direct queries preferred.
+ * External API URLs retained for any future server-side proxy.
+ */
+
 const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/+$/, "");
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const SUPABASE_FUNCTIONS_BASE = SUPABASE_URL ? `${SUPABASE_URL.replace(/\/+$/, "")}/functions/v1` : "";
 
 function pickUrl(explicit: string | undefined, routeName: string): string {
   if (explicit) return explicit;
   if (API_BASE) return `${API_BASE}/${routeName}`;
-  if (SUPABASE_FUNCTIONS_BASE) return `${SUPABASE_FUNCTIONS_BASE}/${routeName}`;
-  throw new Error(`No backend URL configured for ${routeName}. Set VITE_API_BASE_URL or function-specific URL.`);
+  // No more Supabase fallback — use Neon direct queries instead
+  console.warn(`[endpoints] No URL for ${routeName}. Using Neon direct queries.`);
+  return "";
 }
 
 export function getTemporalApiUrl(): string {
@@ -25,8 +33,9 @@ export function getPhantomMcpApiUrl(): string {
   return pickUrl(import.meta.env.VITE_API_PHANTOM_MCP_URL as string | undefined, "phantom-mcp");
 }
 
-export function isSupabaseFunctionUrl(url: string): boolean {
-  return /supabase\.co\/functions\/v1\//.test(url) || /\/functions\/v1\//.test(url);
+/** @deprecated Supabase removed — always returns false */
+export function isSupabaseFunctionUrl(_url: string): boolean {
+  return false;
 }
 
 export function getPublicApiHeaders(): Record<string, string> {

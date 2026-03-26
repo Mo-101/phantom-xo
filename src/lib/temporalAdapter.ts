@@ -1,20 +1,17 @@
-import { supabase } from "@/integrations/supabase/client";
-import { getPublicApiHeaders, getTemporalApiUrl, isSupabaseFunctionUrl } from "@/lib/backendEndpoints";
+/**
+ * MoStar Phantom XO — Temporal Adapter
+ * moscript://codex/v1
+ * sass: "Time flows through Neon now."
+ *
+ * Transforms temporal data from Neon into EvidenceSignal objects for the map.
+ * Replaces former Supabase edge function fetch calls with direct Neon queries.
+ */
+
+import { queryNeon } from "@/integrations/neon/client";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
-interface TemporalFlowsResponse {
-  flows?: TemporalFlowRow[];
-}
-
-interface TemporalEventsResponse {
-  events?: TemporalEventRow[];
-}
-
-interface CrossingPointsResponse {
-  crossing_points?: CrossingPointRow[];
-}
+// ── Row types ───────────────────────────────────────────────────────
 
 interface TemporalFlowRow {
   id: string;
@@ -91,6 +88,8 @@ const EVENT_INTENSITY: Record<string, number> = {
   CONFLICT_ONSET: 1.0,
   MASSIVE_SURGE: 1.0,
   CROSSING_SURGE: 0.85,
+  MASSACRE: 0.95,
+  POLICY_CHANGE: 0.65,
   HEALTH_CRISIS: 0.8,
   CROSSING_CLOSURE: 0.7,
   BORDER_CLOSURE: 0.7,
@@ -136,39 +135,24 @@ function getLineAnchor(coordinates: [number, number][]): CorridorAnchor | null {
   };
 }
 
-async function getFunctionHeaders(url: string) {
-  const headers: Record<string, string> = {
-    ...getPublicApiHeaders(),
-  };
+// ── Data fetching (direct Neon queries, replaces edge function calls) ──
 
-  if (isSupabaseFunctionUrl(url)) {
-    if (SUPABASE_PUBLISHABLE_KEY) {
-      headers.apikey = SUPABASE_PUBLISHABLE_KEY;
-    }
-
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    if (session?.access_token) {
-      headers.Authorization = `Bearer ${session.access_token}`;
-    }
-  }
-
-  return headers;
+async function fetchFlows(): Promise<TemporalFlowRow[]> {
+  return queryNeon<TemporalFlowRow>(
+    `SELECT * FROM temporal_flows ORDER BY period_start ASC`
+  );
 }
 
-async function fetchTemporalJson<T>(query = ""): Promise<T> {
-  const url = `${getTemporalApiUrl()}${query}`;
-  const response = await fetch(url, {
-    headers: await getFunctionHeaders(url),
-  });
+async function fetchEvents(): Promise<TemporalEventRow[]> {
+  return queryNeon<TemporalEventRow>(
+    `SELECT * FROM corridor_temporal_events ORDER BY event_date ASC`
+  );
+}
 
-  if (!response.ok) {
-    throw new Error(`api-temporal ${response.status}: ${await response.text()}`);
-  }
-
-  return response.json() as Promise<T>;
+async function fetchCrossingPointRows(): Promise<CrossingPointRow[]> {
+  return queryNeon<CrossingPointRow>(
+    `SELECT * FROM real_crossing_points ORDER BY monthly_avg_flow DESC NULLS LAST`
+  );
 }
 
 async function loadCorridorAnchors() {
@@ -232,6 +216,8 @@ async function loadCorridorAnchors() {
 
   return corridorAnchorsPromise;
 }
+
+// ── Signal builders ─────────────────────────────────────────────────
 
 function buildFlowSignal(flow: TemporalFlowRow, anchor: CorridorAnchor | undefined): EvidenceSignal {
   const intensity = clamp01((flow.flow_count ?? 0) / 50000);
@@ -301,22 +287,24 @@ function applyPerCorridorDayOffsets(signals: EvidenceSignal[]) {
   }
 }
 
+// ── Public API ─────────────────────────────────────────────────────
+
 export async function fetchTemporalSignals(): Promise<EvidenceSignal[]> {
   try {
-    const [flowsData, eventsData, crossingsData, corridorAnchors] = await Promise.all([
-      fetchTemporalJson<TemporalFlowsResponse>(),
-      fetchTemporalJson<TemporalEventsResponse>("?events=1"),
-      fetchTemporalJson<CrossingPointsResponse>("?crossing_points=1"),
+    const [flows, events, crossingPoints, corridorAnchors] = await Promise.all([
+      fetchFlows(),
+      fetchEvents(),
+      fetchCrossingPointRows(),
       loadCorridorAnchors(),
     ]);
 
     const crossingsById = new Map(
-      (crossingsData.crossing_points ?? []).map((crossing) => [crossing.id, crossing] as const)
+      crossingPoints.map((crossing) => [crossing.id, crossing] as const)
     );
 
     const signals = [
-      ...(flowsData.flows ?? []).map((flow) => buildFlowSignal(flow, corridorAnchors.get(flow.corridor_id))),
-      ...(eventsData.events ?? []).map((event) =>
+      ...flows.map((flow) => buildFlowSignal(flow, corridorAnchors.get(flow.corridor_id))),
+      ...events.map((event) =>
         buildEventSignal(
           event,
           event.crossing_point_id ? crossingsById.get(event.crossing_point_id) : undefined,

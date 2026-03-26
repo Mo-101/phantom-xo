@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { X, MapPin, Calendar, TrendingUp, AlertTriangle, ArrowRight, Shield, ShieldOff } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { queryNeon } from "@/integrations/neon/client";
 
 interface CorridorMeta {
   id: string;
@@ -66,24 +66,6 @@ const EVENT_COLORS: Record<string, string> = {
   BORDER_REOPENING: "text-phantom-green",
   HEALTH_CRISIS: "text-phantom-amber",
   POLICY_CHANGE: "text-phantom-blue",
-  SMUGGLING_SURGE: "text-phantom-amber",
-  MILESTONE: "text-phantom-teal",
-  SEASONAL_SHIFT: "text-phantom-blue",
-};
-
-const RISK_BADGE: Record<string, string> = {
-  CRITICAL: "bg-destructive/20 text-phantom-red border-destructive/30",
-  HIGH: "bg-accent/20 text-phantom-amber border-accent/30",
-  MEDIUM: "bg-[hsl(48_90%_50%/0.2)] text-[hsl(48_90%_50%)] border-[hsl(48_90%_50%/0.3)]",
-};
-
-const IMPACT_ICONS: Record<string, string> = {
-  MASSIVE_SURGE: "↑↑↑",
-  PEAK: "↑↑",
-  SURGE: "↑",
-  DISRUPTION: "⚡",
-  HALT: "⛔",
-  RECOVERY: "↗",
 };
 
 export function CorridorDetailSidebar({ corridor, onClose }: Props) {
@@ -98,21 +80,19 @@ export function CorridorDetailSidebar({ corridor, onClose }: Props) {
     setLoading(true);
     const cid = corridor.id;
 
+    // Replace supabase.from() with direct Neon queries
     const dbPromise = Promise.all([
-      supabase
-        .from("temporal_flows")
-        .select("*")
-        .eq("corridor_id", cid)
-        .order("period_start", { ascending: true }),
-      supabase
-        .from("corridor_temporal_events")
-        .select("*")
-        .or(`corridor_id.eq.${cid},corridor_id.eq.MULTI-CORRIDOR-SUDAN,corridor_id.eq.MULTI-CORRIDOR-SOMALIA`)
-        .order("event_date", { ascending: true }),
-      supabase
-        .from("real_crossing_points")
-        .select("*")
-        .order("monthly_avg_flow", { ascending: false }),
+      queryNeon<TemporalFlow>(
+        `SELECT * FROM temporal_flows WHERE corridor_id = $1 ORDER BY period_start ASC`,
+        [cid]
+      ),
+      queryNeon<TemporalEvent>(
+        `SELECT * FROM corridor_temporal_events WHERE corridor_id = $1 OR corridor_id = 'MULTI-CORRIDOR-SUDAN' OR corridor_id = 'MULTI-CORRIDOR-SOMALIA' ORDER BY event_date ASC`,
+        [cid]
+      ),
+      queryNeon<CrossingPoint>(
+        `SELECT * FROM real_crossing_points ORDER BY monthly_avg_flow DESC NULLS LAST`
+      ),
     ]);
 
     const formalPromise = fetch("/data/corridors_paired.geojson")
@@ -138,9 +118,9 @@ export function CorridorDetailSidebar({ corridor, onClose }: Props) {
       .catch(() => null);
 
     Promise.all([dbPromise, formalPromise]).then(([[flowsRes, eventsRes, xpRes], formalData]) => {
-      setFlows((flowsRes.data as TemporalFlow[]) ?? []);
-      setEvents((eventsRes.data as TemporalEvent[]) ?? []);
-      setCrossings((xpRes.data as CrossingPoint[]) ?? []);
+      setFlows(flowsRes as TemporalFlow[]);
+      setEvents(eventsRes as TemporalEvent[]);
+      setCrossings(xpRes as CrossingPoint[]);
       setFormal(formalData);
       setLoading(false);
     });
@@ -148,163 +128,105 @@ export function CorridorDetailSidebar({ corridor, onClose }: Props) {
 
   const totalFlow = flows.reduce((s, f) => s + (f.flow_count || 0), 0);
   const peakFlow = flows.length ? Math.max(...flows.map((f) => f.flow_count || 0)) : 0;
-  const riskClass = RISK_BADGE[corridor.risk] ?? RISK_BADGE.MEDIUM;
 
   return (
-    <div className="absolute top-0 left-0 bottom-0 z-20 w-[420px] bg-card/95 border-r border-border backdrop-blur-md flex flex-col animate-fade-in-up overflow-hidden">
+    <div className="absolute top-0 right-0 w-96 h-full bg-card/95 backdrop-blur-md border-l border-border shadow-2xl z-30 overflow-y-auto">
       {/* Header */}
-      <div className="px-4 py-3.5 border-b border-border flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 mb-1.5">
-            <span className={`text-xs font-mono px-2 py-1 rounded border ${riskClass}`}>
-              {corridor.risk}
-            </span>
-            <span className="text-xs font-mono text-muted-foreground">{corridor.id}</span>
+      <div className="sticky top-0 z-10 bg-card/95 backdrop-blur-sm border-b border-border px-4 py-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <MapPin className="w-4 h-4 text-phantom-green" />
+            <h3 className="text-sm font-semibold text-foreground truncate max-w-[260px]">
+              {corridor.name}
+            </h3>
           </div>
-          <h2 className="text-base font-medium text-foreground leading-tight truncate">
-            {corridor.name}
-          </h2>
-          <div className="flex items-center gap-3 mt-1.5 text-sm font-mono text-muted-foreground">
-            <span>{corridor.km} km</span>
-            <span>{corridor.mode}</span>
-          </div>
+          <button onClick={onClose} className="p-1 rounded hover:bg-muted/50 transition-colors">
+            <X className="w-4 h-4 text-muted-foreground" />
+          </button>
         </div>
-        <button
-          onClick={onClose}
-          className="p-1.5 rounded hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
-        >
-          <X className="w-5 h-5" />
-        </button>
-      </div>
+        <div className="flex items-center gap-3 mt-2 text-xs font-mono text-muted-foreground">
+          <span className={`px-1.5 py-0.5 rounded text-xs font-bold ${
+            corridor.risk === "CRITICAL" ? "bg-red-500/20 text-red-400" :
+            corridor.risk === "HIGH" ? "bg-orange-500/20 text-orange-400" :
+            corridor.risk === "ELEVATED" ? "bg-yellow-500/20 text-yellow-400" :
+            "bg-green-500/20 text-green-400"
+          }`}>{corridor.risk}</span>
+          <span>{corridor.km} km</span>
+          <span>{corridor.mode}</span>
+        </div>
 
-      {/* Coverage gap card */}
-      {formal && (
-        <div className="mx-4 mt-3 p-3 rounded-md border border-border bg-muted/10">
-          <div className="flex items-center gap-2 mb-2">
-            <ShieldOff className="w-4 h-4 text-phantom-red" />
-            <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">
-              Formal vs Phantom
-            </span>
-          </div>
-          <div className="flex items-center gap-3 mb-2">
-            <div className="flex-1">
-              <div className="h-2.5 rounded-full bg-muted/30 overflow-hidden">
-                <div
-                  className="h-full rounded-full transition-all"
-                  style={{
-                    width: `${formal.coveragePct}%`,
-                    backgroundColor: "hsl(217 91% 60%)",
-                  }}
-                />
-              </div>
+        {/* Formal counterpart */}
+        {formal && (
+          <div className="mt-2 p-2 rounded bg-muted/30 border border-border">
+            <div className="flex items-center gap-1.5 text-xs font-mono">
+              {formal.monitoring === "active" ? (
+                <Shield className="w-3 h-3 text-phantom-green" />
+              ) : (
+                <ShieldOff className="w-3 h-3 text-phantom-amber" />
+              )}
+              <span className="text-muted-foreground">Formal: {formal.name}</span>
             </div>
-            <span className="text-base font-mono text-foreground tabular-nums font-semibold">
-              {formal.coveragePct}%
+            <div className="text-[10px] text-muted-foreground/70 mt-1">
+              Coverage: {formal.coveragePct}% | {formal.gapNote || "No gaps noted"}
+            </div>
+          </div>
+        )}
+
+        {/* Stats row */}
+        {!loading && (
+          <div className="flex items-center gap-4 mt-2 text-xs font-mono text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <TrendingUp className="w-3 h-3" />
+              {totalFlow.toLocaleString()} total
+            </span>
+            <span className="flex items-center gap-1">
+              <AlertTriangle className="w-3 h-3" />
+              {events.length} events
+            </span>
+            <span className="flex items-center gap-1">
+              <ArrowRight className="w-3 h-3" />
+              Peak: {peakFlow.toLocaleString()}
             </span>
           </div>
-          <div className="flex items-center gap-2 mb-1">
-            <Shield className="w-3.5 h-3.5 text-[hsl(217_91%_60%)]" />
-            <span className="text-sm font-mono text-foreground/80 truncate">{formal.name}</span>
-          </div>
-          <div className="flex gap-3 text-xs font-mono text-muted-foreground mt-1.5">
-            <span>Customs {formal.customs ? "✓" : "✗"}</span>
-            <span>Immigration {formal.immigration ? "✓" : "✗"}</span>
-            <span>FMP {formal.iomFmp ? "✓" : "✗"}</span>
-          </div>
-          {formal.gapNote && (
-            <p className="text-xs font-mono text-phantom-amber/80 mt-2 leading-relaxed">
-              {formal.gapNote}
-            </p>
-          )}
-        </div>
-      )}
-
-      {/* Stats strip */}
-      <div className="px-4 py-3 border-b border-border grid grid-cols-3 gap-2 mt-1">
-        <div>
-          <p className="text-xs font-mono text-muted-foreground uppercase tracking-wider">Total Flow</p>
-          <p className="text-lg font-mono text-foreground tabular-nums">
-            {totalFlow >= 1000 ? `${(totalFlow / 1000).toFixed(0)}k` : totalFlow}
-          </p>
-        </div>
-        <div>
-          <p className="text-xs font-mono text-muted-foreground uppercase tracking-wider">Peak</p>
-          <p className="text-lg font-mono text-phantom-amber tabular-nums">
-            {peakFlow >= 1000 ? `${(peakFlow / 1000).toFixed(0)}k` : peakFlow}
-          </p>
-        </div>
-        <div>
-          <p className="text-xs font-mono text-muted-foreground uppercase tracking-wider">Records</p>
-          <p className="text-lg font-mono text-foreground tabular-nums">{flows.length}</p>
-        </div>
+        )}
       </div>
 
       {/* Tabs */}
-      <div className="px-4 py-2 border-b border-border flex gap-1">
+      <div className="flex border-b border-border">
         {(["flows", "events", "crossings"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`px-3 py-1.5 text-sm font-mono rounded transition-colors ${
+            className={`flex-1 px-3 py-2 text-xs font-mono transition-colors ${
               tab === t
-                ? "bg-primary/15 text-primary"
-                : "text-muted-foreground hover:text-foreground hover:bg-muted/30"
+                ? "text-foreground border-b-2 border-phantom-green"
+                : "text-muted-foreground hover:text-foreground"
             }`}
           >
-            {t === "flows" && <TrendingUp className="w-3.5 h-3.5 inline mr-1" />}
-            {t === "events" && <AlertTriangle className="w-3.5 h-3.5 inline mr-1" />}
-            {t === "crossings" && <MapPin className="w-3.5 h-3.5 inline mr-1" />}
-            {t.charAt(0).toUpperCase() + t.slice(1)}
-            <span className="ml-1 text-muted-foreground tabular-nums">
-              {t === "flows" ? flows.length : t === "events" ? events.length : crossings.length}
-            </span>
+            {t === "flows" ? `Flows (${flows.length})` :
+             t === "events" ? `Events (${events.length})` :
+             `Crossings (${crossings.length})`}
           </button>
         ))}
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
+      <div className="p-3 space-y-2">
         {loading && (
-          <div className="flex items-center justify-center py-8">
-            <div className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+          <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground py-8 justify-center">
+            <div className="w-3 h-3 border-2 border-muted-foreground/30 border-t-foreground rounded-full animate-spin" />
+            Loading corridor intelligence\u2026
           </div>
         )}
 
         {!loading && tab === "flows" && (
           <>
-            {flows.length > 0 && (
-              <div className="mb-3 p-2.5 bg-muted/20 rounded border border-border">
-                <div className="flex items-end gap-px h-16">
-                  {flows.map((f) => {
-                    const h = peakFlow > 0 ? (f.flow_count / peakFlow) * 100 : 0;
-                    return (
-                      <div
-                        key={f.id}
-                        className="flex-1 min-w-[3px] rounded-t-sm transition-all hover:opacity-80"
-                        style={{
-                          height: `${Math.max(h, 2)}%`,
-                          backgroundColor: `hsl(var(--phantom-green) / ${0.4 + (h / 100) * 0.6})`,
-                        }}
-                        title={`${f.period_start}: ${f.flow_count.toLocaleString()}`}
-                      />
-                    );
-                  })}
-                </div>
-                <div className="flex justify-between mt-1.5 text-xs font-mono text-muted-foreground">
-                  <span>{flows[0]?.period_start?.slice(0, 7)}</span>
-                  <span>{flows[flows.length - 1]?.period_start?.slice(0, 7)}</span>
-                </div>
-              </div>
-            )}
-
             {flows.map((f) => (
               <div key={f.id} className="p-2.5 rounded border border-border bg-muted/10 hover:bg-muted/20 transition-colors">
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-sm font-mono text-muted-foreground">
-                    <Calendar className="w-3.5 h-3.5 inline mr-1" />
-                    {f.period_start?.slice(0, 10)}
-                    <ArrowRight className="w-3.5 h-3.5 inline mx-1" />
-                    {f.period_end?.slice(0, 10)}
+                  <span className="text-xs font-mono text-muted-foreground">
+                    <Calendar className="w-3 h-3 inline mr-1" />
+                    {f.period_start.slice(0, 10)} \u2192 {f.period_end.slice(0, 10)}
                   </span>
                   <span className="text-sm font-mono text-phantom-green tabular-nums font-medium">
                     {f.flow_count?.toLocaleString()}
@@ -331,20 +253,17 @@ export function CorridorDetailSidebar({ corridor, onClose }: Props) {
             {events.map((e) => (
               <div key={e.id} className="p-2.5 rounded border border-border bg-muted/10 hover:bg-muted/20 transition-colors">
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-sm font-mono text-muted-foreground">
-                    {e.event_date}
+                  <span className={`text-xs font-bold ${EVENT_COLORS[e.event_type] ?? "text-muted-foreground"}`}>
+                    {e.event_type.replace(/_/g, " ")}
                   </span>
-                  <span className={`text-xs font-mono ${EVENT_COLORS[e.event_type] ?? "text-muted-foreground"}`}>
-                    {e.event_type?.replace(/_/g, " ")}
+                  <span className="text-[10px] font-mono text-muted-foreground">
+                    {e.event_date.slice(0, 10)}
                   </span>
                 </div>
-                <p className="text-sm text-foreground/90 leading-relaxed">{e.description}</p>
+                <p className="text-xs text-muted-foreground leading-relaxed">{e.description}</p>
                 {e.flow_impact && (
-                  <span className="inline-block mt-1 text-xs font-mono text-phantom-amber">
-                    {IMPACT_ICONS[e.flow_impact] ?? ""} {e.flow_impact?.replace(/_/g, " ")}
-                  </span>
+                  <p className="text-[10px] text-muted-foreground/60 mt-1">Impact: {e.flow_impact}</p>
                 )}
-                <p className="text-xs font-mono text-muted-foreground/60 mt-1">{e.source}</p>
               </div>
             ))}
             {events.length === 0 && (
@@ -370,36 +289,24 @@ export function CorridorDetailSidebar({ corridor, onClose }: Props) {
                         : "bg-destructive/15 text-phantom-red"
                     }`}
                   >
-                    {xp.status?.replace(/_/g, " ")}
+                    {xp.status}
                   </span>
                 </div>
-                <div className="text-xs font-mono text-muted-foreground mb-1.5">
-                  {xp.country_a} ↔ {xp.country_b}
-                  {xp.iom_fmp_active && (
-                    <span className="ml-2 text-phantom-blue">● IOM FMP</span>
-                  )}
+                <div className="text-xs font-mono text-muted-foreground">
+                  {xp.country_a} \u2194 {xp.country_b}
                 </div>
-                <div className="grid grid-cols-2 gap-2 text-xs font-mono">
-                  <div>
-                    <span className="text-muted-foreground">Avg/mo: </span>
-                    <span className="text-foreground tabular-nums">
-                      {(xp.monthly_avg_flow / 1000).toFixed(0)}k
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Peak/day: </span>
-                    <span className="text-phantom-amber tabular-nums">
-                      {xp.peak_daily_flow?.toLocaleString()}
-                    </span>
-                  </div>
+                <div className="flex items-center gap-3 mt-1 text-[10px] font-mono text-muted-foreground/70">
+                  <span>Avg: {(xp.monthly_avg_flow ?? 0).toLocaleString()}/mo</span>
+                  <span>Peak: {(xp.peak_daily_flow ?? 0).toLocaleString()}/day</span>
+                  {xp.iom_fmp_active && <span className="text-phantom-green">IOM FMP</span>}
                 </div>
-                {xp.closure_periods && (
-                  <p className="text-xs font-mono text-phantom-red/80 mt-1.5">
-                    Closures: {xp.closure_periods}
-                  </p>
-                )}
               </div>
             ))}
+            {crossings.length === 0 && (
+              <p className="text-sm font-mono text-muted-foreground py-6 text-center">
+                No crossing point data available
+              </p>
+            )}
           </>
         )}
       </div>
