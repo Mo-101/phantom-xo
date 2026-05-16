@@ -26,11 +26,44 @@
       "Read(///wsl.localhost/Ubuntu/home/idona/MoStar/The-Phantom/src/hooks/mapbox/**)",
       "Read(///wsl.localhost/Ubuntu/home/idona/MoStar/Phantom/phantom-xo/**)",
       "Bash(xargs grep *)",
-      "Read(///wsl.localhost/Ubuntu/home/idona/MoStar/Phantom/phantom-xo/src/hooks/**)"
+      "Read(///wsl.localhost/Ubuntu/home/idona/MoStar/Phantom/phantom-xo/src/hooks/**)",
+      "Read(///wsl.localhost/Ubuntu/home/idona/MoStar/Phantom/phantom-xo/src/hooks/mapbox/**)",
+      "Bash(wsl -e bash -c \"ls ~/MoStar/The-Phantom/src/hooks/mapbox/ 2>/dev/null && ls ~/MoStar/The-Phantom/app/ 2>/dev/null | head -20\")",
+      "Bash(wsl -e bash -c \"find ~/MoStar/The-Phantom -maxdepth 4 -name '*.ts' -o -name '*.tsx' 2>/dev/null | grep -E '\\(drift|cascade|deviation|corridor\\)' | head -20\")",
+      "Bash(wsl -e bash -c \"find ~/MoStar -name 'drawDriftLayers*' -o -name 'driftEngine*' -o -name 'cascadeEngine*' 2>/dev/null\")",
+      "Read(//home/idona/MoStar/Phantom/phantom-xo/src/hooks/mapbox/**)",
+      "Bash(wsl -e bash -c \"find ~/MoStar/Phantom/phantom-xo/src -name '*.tsx' | xargs grep -l 'cascade\\\\|CascadeHUD\\\\|predictive\\\\|drift' 2>/dev/null\")",
+      "Read(//home/idona/MoStar/Phantom/phantom-xo/src/components/dashboard/**)",
+      "Read(///wsl.localhost/Ubuntu/home/idona/MoStar/Phantom/phantom-xo/src/components/dashboard/**)",
+      "Bash(wsl -e bash -c \"find ~/MoStar/Phantom/phantom-xo/src -name 'drawCascade*' -o -name 'cascade*' | grep -v node_modules\")",
+      "Bash(wsl -e bash -c \"grep -n 'popup\\\\|Popup\\\\|mouseenter\\\\|mousemove\\\\|hover\\\\|tooltip\\\\|drift\\\\|cascade' ~/MoStar/Phantom/phantom-xo/src/hooks/mapbox/useMapboxMap.ts | head -40\")",
+      "Bash(wsl -e bash -c \"grep -rn 'popup\\\\|mouseenter\\\\|hover.*drift\\\\|drift.*hover' ~/MoStar/Phantom/phantom-xo/src --include='*.ts' --include='*.tsx' | grep -v node_modules | head -20\")",
+      "Read(//home/idona/MoStar/Phantom/phantom-xo/src/hooks/**)",
+      "Bash(wsl -e bash -c \"grep -n 'driftResult\\\\|drift\\\\|future-corridor\\\\|Predictive' ~/MoStar/Phantom/phantom-xo/src/components/dashboard/MapLegend.tsx | head -30\")",
+      "Bash(wsl -e bash -c \"grep -n 'driftResult\\\\|drift\\\\|Drift\\\\|confidence\\\\|bearing\\\\|activation\\\\|drivers' ~/MoStar/Phantom/phantom-xo/src/components/dashboard/MapLegend.tsx\")",
+      "Bash(wsl -e bash -c \"grep -n 'driftResult\\\\b' ~/MoStar/Phantom/phantom-xo/src/components/dashboard/MapLegend.tsx\")",
+      "Bash(wsl -e bash -c \"find ~/MoStar/The-Phantom/backend ~/MoStar/The-Phantom/src -name 'server.py' -o -name '*.py' 2>/dev/null | head -20\")",
+      "Bash(wsl -e bash -c \"ls ~/MoStar/The-Phantom/ && ls ~/MoStar/The-Phantom/backend 2>/dev/null || echo 'no backend dir'\")",
+      "Bash(wsl -e bash -c \"ls ~/MoStar/The-Phantom/server/ 2>/dev/null && ls ~/MoStar/The-Phantom/src/ 2>/dev/null\")",
+      "Bash(wsl -e bash -c \"ls ~/MoStar/The-Phantom/app/api/ && find ~/MoStar/The-Phantom/app -name '*.ts' | head -20\")",
+      "Read(//home/idona/MoStar/The-Phantom/app/api/corridors/live/**)",
+      "Read(///wsl.localhost/Ubuntu/home/idona/MoStar/The-Phantom/app/api/corridors/live/**)",
+      "Bash(wsl -e bash -c \"cat ~/MoStar/The-Phantom/lib/db.ts | head -60\")",
+      "Bash(wsl -e bash -c \"mkdir -p ~/MoStar/The-Phantom/app/api/corridors/\\\\\\\\[corridor_id\\\\\\\\]/logistics-routes ~/MoStar/The-Phantom/app/api/corridors/\\\\\\\\[corridor_id\\\\\\\\]/recompute-routes && echo done\")"
     ],
     "additionalDirectories": [
       "\\home\\idona\\MoStar\\The-Phantom\\app\\api\\analytics",
-      "\\\\wsl.localhost\\Ubuntu\\home\\idona\\MoStar\\The-Phantom\\app\\api\\analytics"
+      "\\\\wsl.localhost\\Ubuntu\\home\\idona\\MoStar\\The-Phantom\\app\\api\\analytics",
+      "\\home\\idona\\MoStar\\Phantom\\phantom-xo\\src\\hooks\\mapbox",
+      "\\\\wsl.localhost\\Ubuntu\\home\\idona\\MoStar\\Phantom\\phantom-xo\\src\\hooks\\mapbox",
+      "\\home\\idona\\MoStar\\Phantom\\phantom-xo\\src\\hooks",
+      "\\\\wsl.localhost\\Ubuntu\\home\\idona\\MoStar\\Phantom\\phantom-xo\\src\\hooks",
+      "\\home\\idona\\MoStar\\Phantom\\phantom-xo\\src\\components\\dashboard",
+      "\\\\wsl.localhost\\Ubuntu\\home\\idona\\MoStar\\Phantom\\phantom-xo\\src\\components\\dashboard",
+      "\\home\\idona\\MoStar\\The-Phantom\\app\\api\\corridors\\[corridor_id]\\logistics-routes",
+      "\\\\wsl.localhost\\Ubuntu\\home\\idona\\MoStar\\The-Phantom\\app\\api\\corridors\\[corridor_id]\\logistics-routes",
+      "\\home\\idona\\MoStar\\The-Phantom\\app\\api\\corridors\\[corridor_id]\\recompute-routes",
+      "\\\\wsl.localhost\\Ubuntu\\home\\idona\\MoStar\\The-Phantom\\app\\api\\corridors\\[corridor_id]\\recompute-routes"
     ]
   }
 }

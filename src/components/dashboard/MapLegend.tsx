@@ -257,6 +257,61 @@ const MapLegend = ({
               tip="Inferred crossing node outside or beside formal monitoring infrastructure."
             />
 
+            {/* PREDICTIVE DRIFT */}
+            <div className="pt-2 mt-1.5 border-t border-border">
+              <PanelLabel
+                label="Predictive Analysis"
+                className="text-yellow-400 mb-1.5"
+                tip="Drift engine output — projects where this corridor may shift based on conflict pressure, flow attraction, closure deflection, and seasonal factors."
+              />
+              <LegendItem
+                label="Predicted future path"
+                swatch={<DriftPathSwatch />}
+                tip="Dashed white line showing the projected corridor trajectory. Activate via the Predictive button after selecting a corridor."
+              />
+              <LegendItem
+                label="Confidence halo"
+                swatch={<DriftHaloSwatch />}
+                tip="Yellow glow around the projected path — wider means higher model confidence in the drift direction."
+              />
+              <LegendItem
+                label="Drift force vectors"
+                swatch={<DriftVectorSwatch />}
+                tip="Short directional arrows showing pressure intensity at each point. Yellow = low, orange = moderate, red = high. Hover any arrow on the map for details."
+              />
+              {driftResult && (
+                <div className="mt-2 p-2 bg-yellow-400/5 border border-yellow-400/20 rounded text-[10px] font-mono space-y-1">
+                  <div className="flex justify-between text-yellow-300/80">
+                    <span title="Probability that this corridor's drift will result in a new active route within the projection window.">Activation likelihood</span>
+                    <span className="tabular-nums font-semibold">{(driftResult.activationLikelihood * 100).toFixed(0)}%</span>
+                  </div>
+                  <div className="flex justify-between text-muted-foreground">
+                    <span title="Model confidence in the projected drift direction and distance.">Confidence</span>
+                    <span className="tabular-nums">{(driftResult.confidence * 100).toFixed(0)}%</span>
+                  </div>
+                  <div className="flex justify-between text-muted-foreground">
+                    <span title="Mean displacement distance of the projected corridor from its current position.">Avg shift</span>
+                    <span className="tabular-nums">{driftResult.avgMagnitudeKm.toFixed(1)} km</span>
+                  </div>
+                  <div className="flex justify-between text-muted-foreground">
+                    <span title="Compass bearing of the projected corridor drift direction.">Bearing</span>
+                    <span className="tabular-nums">{driftResult.bearingDeg.toFixed(0)}°</span>
+                  </div>
+                  {driftResult.drivers.length > 0 && (
+                    <div className="pt-1 border-t border-yellow-400/10">
+                      <p className="text-muted-foreground/60 mb-1" title="The weighted evidence drivers that produced this drift projection.">Drivers</p>
+                      {driftResult.drivers.slice(0, 4).map(d => (
+                        <div key={d.name} className="flex justify-between">
+                          <span className="text-muted-foreground/70 truncate max-w-[140px]" title={`${d.signalCount} signals contributing to this driver.`}>{d.name}</span>
+                          <span className="tabular-nums text-yellow-300/60">{(d.weight * 100).toFixed(0)}%</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
             {/* MONITORED — Formal routes */}
             <div className="pt-2 mt-1.5 border-t border-border">
               <PanelLabel
@@ -457,6 +512,39 @@ function FmpSwatch() {
       <div className="absolute inset-0 rounded-full border" style={{ borderColor: "hsl(var(--phantom-teal))", opacity: 0.4 }} />
       <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: "hsl(var(--phantom-teal))" }} />
     </div>
+  );
+}
+
+function DriftPathSwatch() {
+  return (
+    <svg width="20" height="6" viewBox="0 0 20 6">
+      <line x1="0" y1="3" x2="20" y2="3" stroke="white" strokeWidth="2" strokeDasharray="4 3" strokeOpacity="0.5" />
+    </svg>
+  );
+}
+
+function DriftHaloSwatch() {
+  return (
+    <div
+      className="w-5 h-[6px] rounded-full"
+      style={{ background: "#EAB308", opacity: 0.35, filter: "blur(2px)" }}
+    />
+  );
+}
+
+function DriftVectorSwatch() {
+  return (
+    <svg width="20" height="8" viewBox="0 0 20 8">
+      <defs>
+        <linearGradient id="dv-grad" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="#EAB308" />
+          <stop offset="50%" stopColor="#F5A623" />
+          <stop offset="100%" stopColor="#FF453A" />
+        </linearGradient>
+      </defs>
+      <line x1="1" y1="4" x2="16" y2="4" stroke="url(#dv-grad)" strokeWidth="2" />
+      <polyline points="13,1 16,4 13,7" fill="none" stroke="#F5A623" strokeWidth="1.5" />
+    </svg>
   );
 }
 

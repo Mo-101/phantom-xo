@@ -690,6 +690,30 @@ export function useMapboxMap(containerRef: React.RefObject<HTMLDivElement | null
       "ituri-crisis-nodes-circle",
     ];
 
+    const DRIFT_LAYER_TIPS: Record<string, { title: string; desc: string }> = {
+      "future-corridor": {
+        title: "Predicted Future Path",
+        desc: "Dashed white line showing where this corridor is projected to shift based on current evidence pressure. Driven by conflict, flow, and closure vectors.",
+      },
+      "future-corridor-halo": {
+        title: "Confidence Halo",
+        desc: "Yellow glow around the projected path — width encodes model confidence. Wider = higher certainty of corridor drift in this direction.",
+      },
+      "drift-vectors": {
+        title: "Drift Force Vector",
+        desc: "Arrow showing directional pressure on the corridor at this point. Yellow = low pressure, orange = moderate, red = high. Magnitude drives the predicted shift distance.",
+      },
+    };
+
+    function buildDriftTooltipHTML(layerId: string): string {
+      const tip = DRIFT_LAYER_TIPS[layerId];
+      if (!tip) return "";
+      return `<div style="display:flex;flex-direction:column;gap:3px;padding:2px;font-family:monospace">
+        <strong style="font-size:12px;color:#EAB308">${tip.title}</strong>
+        <span style="font-size:10px;color:#9CA3AF;max-width:280px;display:block;line-height:1.5">${tip.desc}</span>
+      </div>`;
+    }
+
     function buildTooltipHTML(props: Record<string, unknown>): string {
       const rt = props.route_type ?? props.type ?? "";
       const rows: string[] = [];
@@ -706,16 +730,30 @@ export function useMapboxMap(containerRef: React.RefObject<HTMLDivElement | null
       return `<div style="display:flex;flex-direction:column;gap:2px;padding:2px;font-family:monospace">${rows.join("")}</div>`;
     }
 
+    const driftLayers = ["future-corridor", "future-corridor-halo", "drift-vectors"];
+
     const onMouseMove = (e: mapboxgl.MapMouseEvent) => {
-      const allLayers = [
+      const corridorLayers = [
         ...phantomLayerIdsRef.current,
         "formal-routes-line",
         ...pointLayers,
       ].filter(id => map.getLayer(id));
 
-      if (allLayers.length === 0) return;
+      const activeDriftLayers = driftLayers.filter(id => map.getLayer(id));
 
-      const features = map.queryRenderedFeatures(e.point, { layers: allLayers });
+      // Check drift layers first — they sit on top of corridors
+      if (activeDriftLayers.length > 0) {
+        const driftFeatures = map.queryRenderedFeatures(e.point, { layers: activeDriftLayers });
+        if (driftFeatures.length > 0) {
+          map.getCanvas().style.cursor = "crosshair";
+          popup.setLngLat(e.lngLat).setHTML(buildDriftTooltipHTML(driftFeatures[0].layer.id)).addTo(map);
+          return;
+        }
+      }
+
+      if (corridorLayers.length === 0) return;
+
+      const features = map.queryRenderedFeatures(e.point, { layers: corridorLayers });
       if (features.length > 0) {
         map.getCanvas().style.cursor = "pointer";
         const props = features[0].properties ?? {};

@@ -39,7 +39,7 @@ export function addDriftLayers(map: mapboxgl.Map): void {
     type: "line",
     source: "future-corridor",
     paint: {
-      "line-color": "#00E87A",
+      "line-color": "#EAB308",
       "line-width": 18,
       "line-opacity": 0.12,
       "line-blur": 8,
@@ -77,7 +77,7 @@ export function addDriftLayers(map: mapboxgl.Map): void {
         "interpolate",
         ["linear"],
         ["get", "magnitude"],
-        0, "#00E87A",
+        0, "#EAB308",
         0.3, "#F5A623",
         0.7, "#FF453A",
       ],
