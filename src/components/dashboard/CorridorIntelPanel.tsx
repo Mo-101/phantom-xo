@@ -11,7 +11,12 @@
  */
 
 import { useEffect, useState } from "react";
-import { X, Activity, TrendingUp, Users, Shield, Database, AlertTriangle, Eye, Mountain } from "lucide-react";
+import { X, Activity, TrendingUp, Users, Shield, Database, AlertTriangle, Eye, Mountain, HelpCircle } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   buildCorridorIntelligence,
   type CorridorIntelligenceViewModel,
@@ -48,12 +53,17 @@ export function CorridorIntelPanel({ corridorId, corridorName, onClose }: Corrid
           {vm && vm.score != null && (
             <div className="flex items-center gap-2 mt-0.5">
               <RiskBadge risk={vm.riskClass} />
-              <span className="text-[10px] font-mono text-muted-foreground tabular-nums">Score: {vm.score.toFixed(2)}</span>
+              <span
+                className="text-[10px] font-mono text-muted-foreground tabular-nums"
+                title="Composite corridor risk score from evidence, structural signals, and model inputs."
+              >
+                Score: {vm.score.toFixed(2)}
+              </span>
               <StateBadge state={vm.latentState} />
             </div>
           )}
         </div>
-        <button onClick={onClose} className="p-1 rounded hover:bg-muted/30 transition-colors flex-shrink-0">
+        <button onClick={onClose} className="p-1 rounded hover:bg-muted/30 transition-colors flex-shrink-0" title="Close corridor intelligence panel">
           <X className="w-4 h-4 text-muted-foreground" />
         </button>
       </div>
@@ -68,7 +78,7 @@ export function CorridorIntelPanel({ corridorId, corridorName, onClose }: Corrid
             {vm.state === "partial" && <PartialDataBanner />}
 
             {/* 1. Age & Origin */}
-            <Section icon={<Activity className="w-3.5 h-3.5" />} title="Corridor Age & Origin">
+            <Section icon={<Activity className="w-3.5 h-3.5" />} title="Corridor Age & Origin" tip="When the corridor was first detected, when it last updated, total route distance, and primary movement mode.">
               {vm.age.firstDetected ? (
                 <Prose>
                   Observed since <Strong>{formatDate(vm.age.firstDetected)}</Strong>
@@ -83,13 +93,18 @@ export function CorridorIntelPanel({ corridorId, corridorName, onClose }: Corrid
             </Section>
 
             {/* 2. Evolution */}
-            <Section icon={<TrendingUp className="w-3.5 h-3.5" />} title="Evolution">
+            <Section icon={<TrendingUp className="w-3.5 h-3.5" />} title="Evolution" tip="Temporal movement trend and whether formal/informal divergence is widening, stable, or declining.">
               {vm.evolution.summary ? (
                 <>
                   <div className="flex items-center gap-2 mb-1.5">
                     <TrendIndicator trend={vm.evolution.trend} />
                     {vm.evolution.divergenceTrend && (
-                      <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-muted/20 text-muted-foreground">divergence {vm.evolution.divergenceTrend}</span>
+                      <span
+                        className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-muted/20 text-muted-foreground"
+                        title="Direction of the gap between formal monitoring and inferred informal movement."
+                      >
+                        divergence {vm.evolution.divergenceTrend}
+                      </span>
                     )}
                   </div>
                   <Prose>{vm.evolution.summary}</Prose>
@@ -103,14 +118,14 @@ export function CorridorIntelPanel({ corridorId, corridorName, onClose }: Corrid
             </Section>
 
             {/* 3. Usage */}
-            <Section icon={<Users className="w-3.5 h-3.5" />} title="Observed Usage">
+            <Section icon={<Users className="w-3.5 h-3.5" />} title="Observed Usage" tip="Estimated movement behavior, likely user groups, dominant movement type, and crossing frequency when available.">
               {vm.usage.summary ? (
                 <>
                   <Prose>{vm.usage.summary}</Prose>
                   {vm.usage.likelyUserGroups.length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-1.5">
                       {vm.usage.likelyUserGroups.map((g) => (
-                        <span key={g} className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-muted/20 text-foreground/60">{g}</span>
+                        <span key={g} className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-muted/20 text-foreground/60" title="Likely user group inferred from evidence types.">{g}</span>
                       ))}
                     </div>
                   )}
@@ -127,7 +142,7 @@ export function CorridorIntelPanel({ corridorId, corridorName, onClose }: Corrid
 
             {/* Invisibility */}
             {vm.invisibility.index != null && (
-              <Section icon={<Eye className="w-3.5 h-3.5" />} title="Invisibility">
+              <Section icon={<Eye className="w-3.5 h-3.5" />} title="Invisibility" tip="How far the phantom route departs from formal roads, monitored gates, or known observation coverage.">
                 <Prose>
                   {vm.invisibility.pctOffroad != null && vm.invisibility.pctOffroad > 80
                     ? `${vm.invisibility.pctOffroad.toFixed(0)}% of this corridor runs more than 1km from any formal road.`
@@ -136,17 +151,17 @@ export function CorridorIntelPanel({ corridorId, corridorName, onClose }: Corrid
                     ? ` The phantom path is ${((1 - vm.invisibility.shortcutRatio) * 100).toFixed(0)}% shorter than the formal route.` : ""}
                 </Prose>
                 <StatGrid>
-                  <Stat label="Invisibility" value={`${(vm.invisibility.index * 100).toFixed(0)}%`} highlight />
-                  <Stat label="Mean dev." value={vm.invisibility.deviationMeanKm != null ? `${vm.invisibility.deviationMeanKm.toFixed(1)} km` : "\u2014"} />
-                  <Stat label="Max dev." value={vm.invisibility.deviationMaxKm != null ? `${vm.invisibility.deviationMaxKm.toFixed(0)} km` : "\u2014"} />
-                  <Stat label="Shortcut" value={vm.invisibility.shortcutRatio != null ? `${((1 - vm.invisibility.shortcutRatio) * 100).toFixed(0)}%` : "\u2014"} />
+                  <Stat label="Invisibility" value={`${(vm.invisibility.index * 100).toFixed(0)}%`} highlight tip="Percent-style score for how poorly formal systems observe this corridor." />
+                  <Stat label="Mean dev." value={vm.invisibility.deviationMeanKm != null ? `${vm.invisibility.deviationMeanKm.toFixed(1)} km` : "\u2014"} tip="Average distance from the phantom route to its formal counterpart." />
+                  <Stat label="Max dev." value={vm.invisibility.deviationMaxKm != null ? `${vm.invisibility.deviationMaxKm.toFixed(0)} km` : "\u2014"} tip="Largest observed distance from formal coverage along the selected corridor." />
+                  <Stat label="Shortcut" value={vm.invisibility.shortcutRatio != null ? `${((1 - vm.invisibility.shortcutRatio) * 100).toFixed(0)}%` : "\u2014"} tip="How much shorter the inferred route is than the formal route." />
                 </StatGrid>
               </Section>
             )}
 
             {/* Terrain */}
             {vm.terrain.landCover && (
-              <Section icon={<Mountain className="w-3.5 h-3.5" />} title="Terrain">
+              <Section icon={<Mountain className="w-3.5 h-3.5" />} title="Terrain" tip="Physical context that affects route friction: land cover, slope, rivers, canoe requirement, and seasonal phase.">
                 <Prose>
                   Land cover: <Strong>{vm.terrain.landCover}</Strong>.
                   {vm.terrain.avgSlope != null && <> Slope: <Strong>{vm.terrain.avgSlope.toFixed(1)}\u00b0</Strong>.</>}
@@ -159,7 +174,7 @@ export function CorridorIntelPanel({ corridorId, corridorName, onClose }: Corrid
 
             {/* Entropy */}
             {vm.entropySpikes.length > 0 && (
-              <Section icon={<AlertTriangle className="w-3.5 h-3.5" />} title="Entropy Spikes">
+              <Section icon={<AlertTriangle className="w-3.5 h-3.5" />} title="Entropy Spikes" tip="Nodes where signal disorder or sudden change is elevated compared with normal corridor behavior.">
                 <Prose>{vm.entropySpikes.length} node{vm.entropySpikes.length > 1 ? "s" : ""} showing elevated signal entropy.</Prose>
                 <div className="space-y-1 mt-1.5">
                   {vm.entropySpikes.map((s, i) => (
@@ -173,14 +188,14 @@ export function CorridorIntelPanel({ corridorId, corridorName, onClose }: Corrid
             )}
 
             {/* 4. Evidence & Credibility */}
-            <Section icon={<Shield className="w-3.5 h-3.5" />} title="Evidence & Credibility">
+            <Section icon={<Shield className="w-3.5 h-3.5" />} title="Evidence & Credibility" tip="Signal count, source mix, strongest detections, and confidence explanation for the corridor assessment.">
               {vm.evidence.signalCount > 0 ? (
                 <>
                   <Prose>{vm.evidence.confidenceExplanation}</Prose>
                   {vm.evidence.sourceTypes.length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-1.5">
                       {vm.evidence.sourceTypes.map((s) => (
-                        <span key={s} className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-muted/20 text-foreground/60">{s}</span>
+                        <span key={s} className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-muted/20 text-foreground/60" title="Evidence source family contributing to this assessment.">{s}</span>
                       ))}
                     </div>
                   )}
@@ -199,8 +214,8 @@ export function CorridorIntelPanel({ corridorId, corridorName, onClose }: Corrid
                     </div>
                   )}
                   <StatGrid>
-                    <Stat label="Signals" value={vm.evidence.signalCount} />
-                    <Stat label="Evidence" value={vm.evidence.count} />
+                    <Stat label="Signals" value={vm.evidence.signalCount} tip="Number of signal observations attached to this corridor." />
+                    <Stat label="Evidence" value={vm.evidence.count} tip="Number of evidence records used in the intelligence view." />
                   </StatGrid>
                 </>
               ) : (
@@ -209,12 +224,12 @@ export function CorridorIntelPanel({ corridorId, corridorName, onClose }: Corrid
             </Section>
 
             {/* 5. Data Quality */}
-            <Section icon={<Database className="w-3.5 h-3.5" />} title="Data Quality">
+            <Section icon={<Database className="w-3.5 h-3.5" />} title="Data Quality" tip="Completeness, freshness, active lane mode, and remaining data gaps for this corridor.">
               <StatGrid>
-                <Stat label="Completeness" value={vm.dataQuality.evidenceCompleteness} />
-                <Stat label="Freshness" value={vm.dataQuality.sourceFreshness} />
-                <Stat label="Mode" value={vm.dataQuality.laneMode} />
-                <Stat label="Gaps" value={vm.dataQuality.unresolvedGaps.length} />
+                <Stat label="Completeness" value={vm.dataQuality.evidenceCompleteness} tip="How much evidence is available relative to what the view model expects." />
+                <Stat label="Freshness" value={vm.dataQuality.sourceFreshness} tip="Whether the latest source run is current, stale, or unknown." />
+                <Stat label="Mode" value={vm.dataQuality.laneMode} tip="Current data lane classification: live, sandbox, test, or unknown." />
+                <Stat label="Gaps" value={vm.dataQuality.unresolvedGaps.length} tip="Known unresolved data gaps for this corridor." />
               </StatGrid>
               {vm.dataQuality.unresolvedGaps.length > 0 && (
                 <div className="mt-1.5 space-y-0.5">
@@ -268,12 +283,13 @@ function PartialDataBanner() {
 }
 
 /* ── Primitives ── */
-function Section({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) {
+function Section({ icon, title, tip, children }: { icon: React.ReactNode; title: string; tip: string; children: React.ReactNode }) {
   return (
     <div className="pt-2 border-t border-border first:pt-0 first:border-t-0">
       <div className="flex items-center gap-1.5 mb-1.5">
         <span className="text-muted-foreground">{icon}</span>
         <h4 className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider font-semibold">{title}</h4>
+        <InfoTip text={tip} />
       </div>
       {children}
     </div>
@@ -288,9 +304,9 @@ function Strong({ children }: { children: React.ReactNode }) {
 function StatGrid({ children }: { children: React.ReactNode }) {
   return <div className="grid grid-cols-2 gap-x-3 gap-y-1 mt-2">{children}</div>;
 }
-function Stat({ label, value, highlight }: { label: string; value: string | number; highlight?: boolean }) {
+function Stat({ label, value, highlight, tip }: { label: string; value: string | number; highlight?: boolean; tip: string }) {
   return (
-    <div className="flex justify-between text-[10px] font-mono">
+    <div className="flex justify-between text-[10px] font-mono gap-2" title={tip}>
       <span className="text-muted-foreground">{label}</span>
       <span className={highlight ? "text-red-400 font-semibold" : "text-foreground tabular-nums"}>{value}</span>
     </div>
@@ -302,23 +318,23 @@ function EmptyField({ label }: { label: string }) {
 function RiskBadge({ risk }: { risk: string | null }) {
   if (!risk) return null;
   const cls = risk === "CRITICAL" ? "bg-red-500/20 text-red-400" : risk === "HIGH" ? "bg-orange-500/20 text-orange-400" : risk === "MEDIUM" ? "bg-yellow-500/20 text-yellow-400" : "bg-green-500/20 text-green-400";
-  return <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded ${cls}`}>{risk}</span>;
+  return <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded ${cls}`} title="Categorical risk class derived from the corridor score and evidence profile.">{risk}</span>;
 }
 function StateBadge({ state }: { state: string | null }) {
   if (!state) return null;
-  return <span className="text-[9px] font-mono text-muted-foreground/60">{state === "active_crossing" ? "\u25c9 active" : state === "surge" ? "\u25c9 surge" : "\u25cb " + state}</span>;
+  return <span className="text-[9px] font-mono text-muted-foreground/60" title="Current latent state assigned by corridor intelligence.">{state === "active_crossing" ? "\u25c9 active" : state === "surge" ? "\u25c9 surge" : "\u25cb " + state}</span>;
 }
 function TrendIndicator({ trend }: { trend: string }) {
   const label = trend === "rising" ? "\u2191 Rising" : trend === "declining" ? "\u2193 Declining" : trend === "stable" ? "\u2192 Stable" : "? Unknown";
   const cls = trend === "rising" ? "text-red-400" : trend === "declining" ? "text-green-400" : "text-muted-foreground";
-  return <span className={`text-[10px] font-mono font-semibold ${cls}`}>{label}</span>;
+  return <span className={`text-[10px] font-mono font-semibold ${cls}`} title="Recent direction of corridor signal activity.">{label}</span>;
 }
 function DivergenceBar({ formal, informal }: { formal: number; informal: number }) {
   const total = formal + informal;
   const formalPct = total > 0 ? (formal / total) * 100 : 50;
   return (
     <div className="mt-2">
-      <div className="flex h-2 rounded-full overflow-hidden border border-border">
+      <div className="flex h-2 rounded-full overflow-hidden border border-border" title="Blue is formal observed volume. Red is inferred informal volume.">
         <div className="bg-blue-500" style={{ width: `${formalPct}%` }} />
         <div className="bg-red-500/60" style={{ width: `${100 - formalPct}%` }} />
       </div>
@@ -327,6 +343,18 @@ function DivergenceBar({ formal, informal }: { formal: number; informal: number 
         <span className="text-red-400">{informal.toLocaleString()} informal</span>
       </div>
     </div>
+  );
+}
+function InfoTip({ text }: { text: string }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <HelpCircle className="w-3 h-3 text-muted-foreground/50 hover:text-foreground/80 shrink-0" />
+      </TooltipTrigger>
+      <TooltipContent side="right" className="max-w-[260px] text-xs font-mono leading-relaxed">
+        {text}
+      </TooltipContent>
+    </Tooltip>
   );
 }
 function formatDate(dateStr: string | null | undefined): string {

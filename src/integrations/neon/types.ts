@@ -1,4 +1,4 @@
-<<<<<<< Updated upstream
+// <<<<<<< Updated upstream
 /**
  * MoStar Phantom XO — Neon Database Types
  * moscript://codex/v1

@@ -1,7 +1,13 @@
 import type { MapboxDrawContext, CorridorMeta } from "./types";
 import { RISK_COLORS } from "./types";
+import {
+  ITURI_CORRIDOR_META,
+  ITURI_CRISIS_CORRIDOR,
+  getIturiLineCoordinates,
+} from "@/data/ituri-crisis-corridor";
 
 const FORMAL_BLUE = "#3B82F6";
+const ITURI_LAYER_ID = "phantom-line-CORRIDOR-CD-UG-ITU-001";
 
 export interface CoverageStats {
   monitoredPct: number;
@@ -27,7 +33,8 @@ export async function drawCorridors(ctx: MapboxDrawContext): Promise<DrawCorrido
   ]);
 
   const paired = await pairedRes.json();
-  const meta: CorridorMeta[] = await metaRes.json();
+  const baseMeta: CorridorMeta[] = await metaRes.json();
+  const meta: CorridorMeta[] = [ITURI_CORRIDOR_META, ...baseMeta];
   console.log("[Mapbox] Paired GeoJSON loaded:", paired.features.length, "features");
 
   // ── Separate features by type ──
@@ -42,6 +49,7 @@ export async function drawCorridors(ctx: MapboxDrawContext): Promise<DrawCorrido
     else if (gt === "LineString" && rt === "FORMAL") formalLinesOld.push(feature);
     else if (gt === "Point") nodePoints.push(feature);
   }
+  console.log("[Mapbox] Phantom lines:", phantomLines.length, "Formal lines:", formalLinesOld.length, "Nodes:", nodePoints.length);
 
   // ── 1. Phantom corridors (per-feature line-gradient) ──
   const phantomLayerIds: string[] = [];
@@ -86,8 +94,92 @@ export async function drawCorridors(ctx: MapboxDrawContext): Promise<DrawCorrido
     phantomLayerIds.push(lyrId);
   }
 
+  const ituriLineFeature: GeoJSON.Feature<GeoJSON.LineString> = {
+    type: "Feature",
+    properties: {
+      id: ITURI_CRISIS_CORRIDOR.id,
+      name: `${ITURI_CRISIS_CORRIDOR.startNode} -> ${ITURI_CRISIS_CORRIDOR.endNode}`,
+      route_type: "PHANTOM",
+      risk_class: ITURI_CRISIS_CORRIDOR.riskClass,
+      latent_state: "live_crisis",
+      score: ITURI_CRISIS_CORRIDOR.score,
+      distance_km: ITURI_CRISIS_CORRIDOR.totalKm,
+      inferred_mode: ITURI_CRISIS_CORRIDOR.mode,
+      gap_km: ITURI_CRISIS_CORRIDOR.totalKm,
+      formal_poe_coverage: "gap",
+      signal_count: ITURI_CRISIS_CORRIDOR.evidence.length,
+      conflict_detour: ITURI_CRISIS_CORRIDOR.detour,
+      description: ITURI_CRISIS_CORRIDOR.coverage,
+    },
+    geometry: {
+      type: "LineString",
+      coordinates: getIturiLineCoordinates(),
+    },
+  };
+
+  map.addSource("ituri-crisis-corridor", {
+    type: "geojson",
+    data: ituriLineFeature,
+    lineMetrics: true,
+  });
+
+  map.addLayer({
+    id: "ituri-crisis-glow",
+    type: "line",
+    source: "ituri-crisis-corridor",
+    paint: {
+      "line-color": "#EF4444",
+      "line-width": 13,
+      "line-opacity": 0.32,
+      "line-blur": 5,
+    },
+    layout: {
+      "line-cap": "round",
+      "line-join": "round",
+    },
+  });
+
+  map.addLayer({
+    id: ITURI_LAYER_ID,
+    type: "line",
+    source: "ituri-crisis-corridor",
+    paint: {
+      "line-color": "#FF453A",
+      "line-width": 6,
+      "line-gradient": [
+        "interpolate",
+        ["linear"],
+        ["line-progress"],
+        0,
+        "#F97316",
+        0.35,
+        "#EF4444",
+        0.7,
+        "#DC2626",
+        1,
+        "#FDE047",
+      ],
+    },
+    layout: {
+      "line-cap": "round",
+      "line-join": "round",
+    },
+  });
+
+  phantomLayerIds.unshift(ITURI_LAYER_ID);
+
   // Phantom corridor labels at midpoints
-  const phantomLabelFeatures: GeoJSON.Feature[] = phantomLines.map((f) => {
+  const phantomLabelFeatures: GeoJSON.Feature[] = [
+    {
+      type: "Feature",
+      properties: {
+        name: ITURI_CRISIS_CORRIDOR.short,
+        risk_class: ITURI_CRISIS_CORRIDOR.riskClass,
+        score: ITURI_CRISIS_CORRIDOR.score,
+      },
+      geometry: { type: "Point", coordinates: [30.55, 1.95] },
+    },
+    ...phantomLines.map((f) => {
     const coords = (f.geometry as GeoJSON.LineString).coordinates;
     const mid = coords[Math.floor(coords.length / 2)];
     return {
@@ -99,7 +191,8 @@ export async function drawCorridors(ctx: MapboxDrawContext): Promise<DrawCorrido
       },
       geometry: { type: "Point", coordinates: mid },
     };
-  });
+    }),
+  ];
 
   map.addSource("phantom-labels", {
     type: "geojson",
@@ -341,8 +434,83 @@ export async function drawCorridors(ctx: MapboxDrawContext): Promise<DrawCorrido
     });
   }
 
+  const ituriNodeFeatures: GeoJSON.Feature[] = ITURI_CRISIS_CORRIDOR.nodes.map((node) => ({
+    type: "Feature",
+    properties: {
+      id: ITURI_CRISIS_CORRIDOR.id,
+      corridor_id: ITURI_CRISIS_CORRIDOR.id,
+      name: node.name,
+      route_type: "ITURI_CRISIS_NODE",
+      node_type: node.type,
+      risk_class: node.type === "crossing" || node.type === "phantom" ? "CRITICAL" : "HIGH",
+      km: node.km,
+      cc: node.cc,
+      prec: node.prec,
+    },
+    geometry: {
+      type: "Point",
+      coordinates: [node.lng, node.lat],
+    },
+  }));
+
+  map.addSource("ituri-crisis-nodes", {
+    type: "geojson",
+    data: { type: "FeatureCollection", features: ituriNodeFeatures },
+  });
+
+  map.addLayer({
+    id: "ituri-crisis-nodes-circle",
+    type: "circle",
+    source: "ituri-crisis-nodes",
+    paint: {
+      "circle-radius": [
+        "match",
+        ["get", "node_type"],
+        "crossing",
+        9,
+        "phantom",
+        8,
+        "border",
+        7,
+        6,
+      ],
+      "circle-color": [
+        "match",
+        ["get", "node_type"],
+        "crossing",
+        "#FDE047",
+        "phantom",
+        "#EF4444",
+        "border",
+        "#F97316",
+        "#22C55E",
+      ],
+      "circle-stroke-color": "#070A10",
+      "circle-stroke-width": 2,
+    },
+  });
+
+  map.addLayer({
+    id: "ituri-crisis-nodes-labels",
+    type: "symbol",
+    source: "ituri-crisis-nodes",
+    layout: {
+      "text-field": ["get", "name"],
+      "text-font": ["Open Sans Bold"],
+      "text-size": 10,
+      "text-offset": [0, -1.5],
+      "text-anchor": "bottom",
+      "text-allow-overlap": false,
+    },
+    paint: {
+      "text-color": "#FDE047",
+      "text-halo-color": "#070A10",
+      "text-halo-width": 1.5,
+    },
+  });
+
   // ── Compute real coverage stats ──
-  let totalPhantomKm = 0;
+  let totalPhantomKm = ITURI_CRISIS_CORRIDOR.totalKm;
   let weightedCoverage = 0;
   let totalFormalKm = 0;
 
@@ -366,7 +534,7 @@ export async function drawCorridors(ctx: MapboxDrawContext): Promise<DrawCorrido
   const coverageStats: CoverageStats = {
     monitoredPct,
     unmonitoredPct,
-    totalCorridors: phantomLines.length,
+    totalCorridors: phantomLines.length + 1,
     totalPhantomKm: Math.round(totalPhantomKm),
     totalFormalKm: Math.round(totalFormalKm),
   };
@@ -381,6 +549,7 @@ export let CORRIDOR_LAYER_IDS: string[] = [];
 export function setCorridorLayerIds(phantomIds: string[]) {
   CORRIDOR_LAYER_IDS = [
     ...phantomIds,
+    "ituri-crisis-glow",
     "phantom-corridor-labels",
     "formal-routes-line",
     "formal-route-labels",
@@ -390,6 +559,8 @@ export function setCorridorLayerIds(phantomIds: string[]) {
     "iom-fmps-circle",
     "phantom-poes-circle",
     "phantom-poes-labels",
+    "ituri-crisis-nodes-circle",
+    "ituri-crisis-nodes-labels",
   ];
 }
 
@@ -401,5 +572,3 @@ export const LABEL_LAYER_IDS = [
   "geo-city-dots",
   "geo-city-labels",
 ];
-
-

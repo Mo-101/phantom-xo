@@ -10,6 +10,7 @@
  */
 
 import { queryNeon } from "@/lib/neon";
+import { ITURI_CRISIS_CORRIDOR } from "@/data/ituri-crisis-corridor";
 
 // ── View Model Types ────────────────────────────────────────────────
 
@@ -100,6 +101,10 @@ export interface CorridorIntelligenceViewModel {
 export async function buildCorridorIntelligence(
   corridorId: string
 ): Promise<CorridorIntelligenceViewModel> {
+  if (corridorId === ITURI_CRISIS_CORRIDOR.id) {
+    return buildIturiCrisisIntelligence();
+  }
+
   const empty: CorridorIntelligenceViewModel = {
     state: "loading",
     corridorId,
@@ -318,4 +323,96 @@ export async function buildCorridorIntelligence(
     console.error("[buildCorridorIntelligence]", err);
     return { ...empty, state: "unavailable" };
   }
+}
+
+function buildIturiCrisisIntelligence(): CorridorIntelligenceViewModel {
+  const firstDetected = ITURI_CRISIS_CORRIDOR.firstDetected;
+  const latestEvidence = [...ITURI_CRISIS_CORRIDOR.evidence].sort(
+    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+  )[0];
+  const sourceTypes = [...new Set(ITURI_CRISIS_CORRIDOR.evidence.map((evidence) => evidence.source))];
+  const affected = ITURI_CRISIS_CORRIDOR.evidence.reduce((sum, evidence) => sum + (evidence.affected ?? 0), 0);
+  const casualties = ITURI_CRISIS_CORRIDOR.evidence.reduce((sum, evidence) => sum + (evidence.casualties ?? 0), 0);
+
+  return {
+    state: "live",
+    corridorId: ITURI_CRISIS_CORRIDOR.id,
+    corridorName: `${ITURI_CRISIS_CORRIDOR.startNode} -> ${ITURI_CRISIS_CORRIDOR.endNode}`,
+    age: {
+      firstDetected,
+      lastSeen: latestEvidence?.timestamp ?? firstDetected,
+      activeDurationDays: Math.max(
+        1,
+        Math.round((Date.now() - new Date(firstDetected).getTime()) / 86400000)
+      ),
+    },
+    evolution: {
+      trend: "rising",
+      routeStability: null,
+      divergenceRatio: 0.729,
+      formalVolume: null,
+      informalVolume: affected,
+      divergenceTrend: "widening",
+      summary:
+        "Ebola confirmation, imported-case signal at the Uganda crossing axis, ADF pressure, and displacement reports are converging on the same Ituri-West Nile route.",
+    },
+    usage: {
+      crossingFrequency: null,
+      dominantMovementType: "mixed displacement and health-risk movement",
+      likelyUserGroups: ["displaced populations", "border communities", "health-risk movement", "cross-border traders"],
+      mode: ITURI_CRISIS_CORRIDOR.mode,
+      summary: `${affected.toLocaleString()} affected/displaced/case signals and ${casualties.toLocaleString()} casualty signals are attached to the live seed.`,
+    },
+    evidence: {
+      count: ITURI_CRISIS_CORRIDOR.evidence.length,
+      signalCount: ITURI_CRISIS_CORRIDOR.evidence.length,
+      strongest: [...ITURI_CRISIS_CORRIDOR.evidence]
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 5)
+        .map((evidence) => ({
+          type: evidence.type,
+          source: evidence.source,
+          timestamp: evidence.timestamp,
+          confidence: evidence.score,
+          summary: `${evidence.tag} - ${evidence.loc}`,
+        })),
+      sourceTypes,
+      confidenceExplanation:
+        "Static live seed for the Ituri crisis module. Evidence carries source IDs and timestamps; Neon/Neo4j promotion can replace the seed without changing this view model.",
+    },
+    dataQuality: {
+      evidenceCompleteness: "partial",
+      sourceFreshness: "current",
+      unresolvedGaps: [
+        "Live source polling is not yet connected in this workspace",
+        "Neo4j-backed corridor promotion is pending",
+        "Evidence source claims are stored from the provided seed and not independently verified by this client",
+      ],
+      laneMode: "LIVE",
+    },
+    score: ITURI_CRISIS_CORRIDOR.score,
+    riskClass: ITURI_CRISIS_CORRIDOR.riskClass,
+    latentState: "live_crisis",
+    distanceKm: ITURI_CRISIS_CORRIDOR.totalKm,
+    gapKm: ITURI_CRISIS_CORRIDOR.gapZone ? ITURI_CRISIS_CORRIDOR.totalKm : null,
+    invisibility: {
+      index: 0.729,
+      deviationMeanKm: null,
+      deviationMaxKm: null,
+      shortcutRatio: null,
+      pctOffroad: null,
+    },
+    terrain: {
+      landCover: "Ituri mining-town, hill-route, border-town, and West Nile hub corridor",
+      avgSlope: null,
+      hasRiver: false,
+      riverWidthM: null,
+      requiresCanoe: ITURI_CRISIS_CORRIDOR.canoe,
+      seasonalPhase: ITURI_CRISIS_CORRIDOR.seasonal ? "seasonal" : "year-round",
+    },
+    entropySpikes: [
+      { nodeId: "Bunia", deltaH: ITURI_CRISIS_CORRIDOR.engineInput.entropyScore, riskClass: "HIGH" },
+      { nodeId: "Mahagi-Goli", deltaH: ITURI_CRISIS_CORRIDOR.engineInput.linguisticScore, riskClass: "MODERATE" },
+    ],
+  };
 }

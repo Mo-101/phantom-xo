@@ -22,14 +22,13 @@ export interface CorridorAnimator {
   isActive: () => boolean;
 }
 
-const TOTAL_DAYS = 90;
+const DEFAULT_TOTAL_DAYS = 90;
 const MS_PER_DAY = 1000; // 1 real second = 1 simulated day
-const SIM_START = new Date("2024-01-15"); // simulated calendar start
 
 const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 function simDate(day: number): Date {
-  const d = new Date(SIM_START);
+  const d = new Date();
   d.setDate(d.getDate() + day);
   return d;
 }
@@ -47,6 +46,7 @@ export function createCorridorAnimator(
   map: mapboxgl.Map,
   phantomLayerIds: string[],
   corridorsMeta: { id: string; km: number; risk: string }[],
+  opts?: { startDate?: Date; endDate?: Date }
 ): CorridorAnimator {
   let rafId: number | null = null;
   let active = false;
@@ -83,14 +83,21 @@ export function createCorridorAnimator(
     ? Math.max(...timings.map(t => t.endAt))
     : 1;
 
+  const startDate = opts?.startDate ? new Date(opts.startDate) : new Date("2024-01-15T00:00:00Z");
+  const endDate = opts?.endDate ? new Date(opts.endDate) : null;
+  const derivedTotalDays = endDate
+    ? Math.max(1, Math.round((endDate.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000)))
+    : DEFAULT_TOTAL_DAYS;
+
   // Real duration scales to maxEndAt so timer and lines end together
-  const realDurationMs = maxEndAt * TOTAL_DAYS * MS_PER_DAY;
-  const effectiveTotalDays = Math.round(maxEndAt * TOTAL_DAYS);
+  const realDurationMs = maxEndAt * derivedTotalDays * MS_PER_DAY;
+  const effectiveTotalDays = Math.round(maxEndAt * derivedTotalDays);
 
   function buildState(rawProgress: number, isActive: boolean): CorridorAnimState {
-    const day = Math.round(rawProgress * TOTAL_DAYS);
+    const day = Math.round(rawProgress * derivedTotalDays);
     const clampedDay = Math.min(day, effectiveTotalDays);
-    const d = simDate(clampedDay);
+    const d = new Date(startDate);
+    d.setDate(d.getDate() + clampedDay);
     const week = Math.floor(clampedDay / 7) + 1;
     const month = Math.floor(clampedDay / 30) + 1;
     // normalised 0–1 within the actual animation window

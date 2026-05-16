@@ -1,12 +1,12 @@
-# ◉⟁⬡ Phantom POE Engine
+# 3◉⟁⬡ Phantom POE Engine
 
-> *"We do not watch people. We listen to where the earth is being walked."*
+> \\\\\\\*"We do not watch people. We listen to where the earth is being walked."\\\\\\\*
 
 **Phantom POE** is a corridor intelligence system built for the WHO Africa Region. It reconstructs probable informal cross-border movement pathways from real-world signals, terrain physics, and graph inference — then presents those pathways with auditable evidence, uncertainty bounds, and live activation status.
 
 This is not a dashboard. It is an instrument.
 
----
+\---
 
 ## What it does
 
@@ -22,7 +22,7 @@ Given a set of disease signals, displacement flows, conflict events, and entropy
 
 Then it answers — with evidence, with math, with provenance, and without fabrication.
 
----
+\---
 
 ## The intelligence architecture
 
@@ -30,16 +30,16 @@ Then it answers — with evidence, with math, with provenance, and without fabri
 
 Every corridor score is computed from a weighted ensemble of independent inference models. Nothing is a black box.
 
-| Soul | Symbol | Weight | What it measures |
-|------|--------|--------|-----------------|
-| **Gravity** | 🜁 | 0.10 | Population × market pull — why movement would happen |
-| **Diffusion** | 🜂 | 0.20 | Outbreak timing converted to spatial path inference |
-| **Centrality** | 🜃 | 0.15 | Graph betweenness — no formal POE present in this zone |
-| **HMM** | 🜄 | 0.20 | Hidden Markov Model — latent crossing state inference |
-| **Seasonal** | ☿ | 0.08 | 52-week Fourier harmonic — seasonal activation signature |
-| **Linguistic** | ♄ | 0.10 | Language shift rate across the border zone |
-| **Entropy** | ♃ | 0.12 | Shannon ΔH spike — signal destabilization detection |
-| **Terrain** | ⛰ | 0.05 | Least-cost path physics — is this route physically possible? |
+|Soul|Symbol|Weight|What it measures|
+|-|-|-|-|
+|**Gravity**|🜁|0.10|Population × market pull — why movement would happen|
+|**Diffusion**|🜂|0.20|Outbreak timing converted to spatial path inference|
+|**Centrality**|🜃|0.15|Graph betweenness — no formal POE present in this zone|
+|**HMM**|🜄|0.20|Hidden Markov Model — latent crossing state inference|
+|**Seasonal**|☿|0.08|52-week Fourier harmonic — seasonal activation signature|
+|**Linguistic**|♄|0.10|Language shift rate across the border zone|
+|**Entropy**|♃|0.12|Shannon ΔH spike — signal destabilization detection|
+|**Terrain**|⛰|0.05|Least-cost path physics — is this route physically possible?|
 
 The composite score formula:
 
@@ -75,37 +75,37 @@ DCX2 · BODY  (Mistral)   — synthesize, produce analyst-ready output
 If the Soul rejects the Mind's analysis, the loop does not complete. No synthesis is fabricated.  
 If Trinity is offline, `loopComplete: false` is returned — never a fake output.
 
----
+\---
 
 ## Live signal sources
 
-| Source | Type | Element | Update frequency |
-|--------|------|---------|-----------------|
-| AFRO Sentinel (Supabase) | Disease intelligence | 🜂 Fire | Every 5 min |
-| DHIS2 / EWARS | Health facility reports | 🜂 Fire | Every 15 min |
-| ACLED | Conflict events | 🜁 Air | Every 30 min |
-| IOM DTM | Displacement flows | 🜄 Water | Every 60 min |
+|Source|Type|Element|Update frequency|
+|-|-|-|-|
+|AFRO Sentinel (Supabase)|Disease intelligence|🜂 Fire|Every 5 min|
+|DHIS2 / EWARS|Health facility reports|🜂 Fire|Every 15 min|
+|ACLED|Conflict events|🜁 Air|Every 30 min|
+|IOM DTM|Displacement flows|🜄 Water|Every 60 min|
 
 Sources are staggered by 8 seconds on boot and processed through tiered priority queues with circuit breakers. A source failing 3 times in succession opens its circuit for 5 minutes — it does not take down the entire pipeline.
 
 **There is no mock data in this system. Missing credentials cause hard throws, not silent fallbacks.**
 
----
+\---
 
 ## The map
 
 The corridor intelligence surface runs on real photorealistic 3D terrain.
 
-- `gmp-map-3d` — Google Maps photorealistic 3D globe
-- `gmp-polyline-3d` — corridor paths rendered as 3D entities at real elevation
-- `gmp-marker-3d` — signal markers at actual lat/lng/altitude
-- Camera flies to each corridor's anchor zone on selection
+* `gmp-map-3d` — Google Maps photorealistic 3D globe
+* `gmp-polyline-3d` — corridor paths rendered as 3D entities at real elevation
+* `gmp-marker-3d` — signal markers at actual lat/lng/altitude
+* Camera flies to each corridor's anchor zone on selection
 
 The Intel Panel floats as an HTML overlay alongside the live map — not on a separate canvas.
 
 **Planned:** Cesium + MapTiler migration for terrain-queryable 3D and `sampleTerrain()` integration with the friction surface model.
 
----
+\---
 
 ## The analyst workflow
 
@@ -124,59 +124,59 @@ The **time scrubber** replays how a corridor emerged — day by day, signal by s
 
 **Gap Analysis mode** shows formal POE coverage circles against the border. The blind zone is red. The corridor runs through it.
 
----
+\---
 
 ## The data model
 
 All corridor intelligence lives in a dedicated Neo4j subgraph compartment — isolated from the MoStar Grid.
 
-### Label namespace: `POE_*`
+### Label namespace: `POE\\\\\\\_\\\\\\\*`
 
-| Label | Contents |
-|-------|----------|
-| `POE_Signal` | Validated signals from live sources |
-| `POE_Corridor` | Detected corridor objects with scores |
-| `POE_Entropy` | Shannon entropy spike alerts |
-| `POE_Moment` | Trinity loop synthesis records |
-| `POE_Run` | Run provenance and metadata |
-| `POE_Node` | Geographic anchor points |
+|Label|Contents|
+|-|-|
+|`POE\\\\\\\_Signal`|Validated signals from live sources|
+|`POE\\\\\\\_Corridor`|Detected corridor objects with scores|
+|`POE\\\\\\\_Entropy`|Shannon entropy spike alerts|
+|`POE\\\\\\\_Moment`|Trinity loop synthesis records|
+|`POE\\\\\\\_Run`|Run provenance and metadata|
+|`POE\\\\\\\_Node`|Geographic anchor points|
 
 Every node carries:
 
-- `runId` — unique per boot cycle
-- `workspace: 'phantom-poe'`
-- `system: 'mo-border-phantom-001'`
-- `source` + `sourceRecordId` — traceable to origin
-- `ingestedAt` + `updatedAt`
-- `normalizationVersion`
+* `runId` — unique per boot cycle
+* `workspace: 'phantom-poe'`
+* `system: 'mo-border-phantom-001'`
+* `source` + `sourceRecordId` — traceable to origin
+* `ingestedAt` + `updatedAt`
+* `normalizationVersion`
 
 ### Key relationships
 
 ```cypher
-(:POE_Run)-[:POE_INGESTED]->(:POE_Signal)
-(:POE_Signal)-[:POE_LOCATED_AT]->(:POE_Node)
-(:POE_Corridor)-[:POE_CONTAINS_SIGNAL]->(:POE_Signal)
-(:POE_Corridor)-[:POE_STARTS_AT]->(:POE_Node)
-(:POE_Corridor)-[:POE_ENDS_AT]->(:POE_Node)
-(:POE_Entropy)-[:POE_ALERT_ON]->(:POE_Node)
-(:POE_Moment)-[:POE_SYNTHESIZES]->(:POE_Corridor)
+(:POE\\\\\\\_Run)-\\\\\\\[:POE\\\\\\\_INGESTED]->(:POE\\\\\\\_Signal)
+(:POE\\\\\\\_Signal)-\\\\\\\[:POE\\\\\\\_LOCATED\\\\\\\_AT]->(:POE\\\\\\\_Node)
+(:POE\\\\\\\_Corridor)-\\\\\\\[:POE\\\\\\\_CONTAINS\\\\\\\_SIGNAL]->(:POE\\\\\\\_Signal)
+(:POE\\\\\\\_Corridor)-\\\\\\\[:POE\\\\\\\_STARTS\\\\\\\_AT]->(:POE\\\\\\\_Node)
+(:POE\\\\\\\_Corridor)-\\\\\\\[:POE\\\\\\\_ENDS\\\\\\\_AT]->(:POE\\\\\\\_Node)
+(:POE\\\\\\\_Entropy)-\\\\\\\[:POE\\\\\\\_ALERT\\\\\\\_ON]->(:POE\\\\\\\_Node)
+(:POE\\\\\\\_Moment)-\\\\\\\[:POE\\\\\\\_SYNTHESIZES]->(:POE\\\\\\\_Corridor)
 ```
 
 ### Verification queries
 
 ```cypher
 -- Confirm signals are landing in the right compartment
-MATCH (s:POE_Signal {workspace: 'phantom-poe'})
+MATCH (s:POE\\\\\\\_Signal {workspace: 'phantom-poe'})
 RETURN s.signalId, s.source, s.sourceRecordId, s.truthScore, s.runId
 ORDER BY s.timestamp DESC LIMIT 10;
 
 -- Confirm corridors are activating
-MATCH (c:POE_Corridor {workspace: 'phantom-poe'})
+MATCH (c:POE\\\\\\\_Corridor {workspace: 'phantom-poe'})
 RETURN c.corridorId, c.score, c.riskClass, c.runId
 ORDER BY c.timestamp DESC LIMIT 5;
 
 -- Confirm Trinity is sealing moments
-MATCH (m:POE_Moment {workspace: 'phantom-poe'})
+MATCH (m:POE\\\\\\\_Moment {workspace: 'phantom-poe'})
 RETURN m.momentId, m.scriptId, m.wooState, m.sealedAt
 ORDER BY m.sealedAt DESC LIMIT 5;
 
@@ -185,7 +185,7 @@ MATCH (s:SignalEvent) WHERE s.runId STARTS WITH 'RUN-'
 RETURN count(s); -- Should be 0
 ```
 
----
+\---
 
 ## Tech stack
 
@@ -207,11 +207,11 @@ Zod (schema validation — every signal validated before persistence)
 
 The browser bundle contains **zero** of the following:
 
-- `neo4j-driver`
-- `node:crypto`
-- `pg`
-- Provider credentials
-- MCP SDK
+* `neo4j-driver`
+* `node:crypto`
+* `pg`
+* Provider credentials
+* MCP SDK
 
 The frontend calls typed API routes only:
 
@@ -225,7 +225,7 @@ GET  /api/diagnostics
 POST /api/mcp
 ```
 
----
+\---
 
 ## MoScript engine
 
@@ -236,15 +236,15 @@ Every operation in the engine is registered and executed as a MoScript — a typ
 {
   id:         "mo-signal-ingest-001",
   name:       "Live Signal Ingestion Pipeline",
-  trigger:    'cron("0 * * * *")',
-  inputs:     ["signalRepo", "runId"],
-  logic:      async (inputs) => { /* ... */ },
+  trigger:    'cron("0 \\\\\\\* \\\\\\\* \\\\\\\* \\\\\\\*")',
+  inputs:     \\\\\\\["signalRepo", "runId"],
+  logic:      async (inputs) => { /\\\\\\\* ... \\\\\\\*/ },
   voiceLine:  (result) => `Pipeline sealed. ${result.signalsIngested} signals ingested.`,
   sass:       true,
 }
 ```
 
-Every script execution passes through **Woo** — the ethical gate — before running. Every result is sealed as a `POE_Moment` in Neo4j. Memory persists across restarts.
+Every script execution passes through **Woo** — the ethical gate — before running. Every result is sealed as a `POE\\\\\\\_Moment` in Neo4j. Memory persists across restarts.
 
 The boot sequence runs 7 layers:
 
@@ -259,41 +259,41 @@ Layer 6  — Learn + Remember (moment sealing)
 Layer 7  — Grid status report
 ```
 
----
+\---
 
 ## Environment variables
 
-### Client-safe (`NEXT_PUBLIC_` prefix)
+### Client-safe (`NEXT\\\\\\\_PUBLIC\\\\\\\_` prefix)
 
 ```env
-NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=
-NEXT_PUBLIC_FIREBASE_API_KEY=
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=
+NEXT\\\\\\\_PUBLIC\\\\\\\_GOOGLE\\\\\\\_MAPS\\\\\\\_API\\\\\\\_KEY=
+NEXT\\\\\\\_PUBLIC\\\\\\\_FIREBASE\\\\\\\_API\\\\\\\_KEY=
+NEXT\\\\\\\_PUBLIC\\\\\\\_FIREBASE\\\\\\\_PROJECT\\\\\\\_ID=
 ```
 
 ### Server-only (never reaches browser)
 
 ```env
-GOOGLE_AI_API_KEY=
-NEO4J_URI=bolt://...
-NEO4J_USER=
-NEO4J_PASSWORD=
-SUPABASE_URL=
-AFRO_SENTINEL_SERVICE_KEY=
-NEON_DATABASE_URL=
-OLLAMA_BASE_URL=http://localhost:11434
-ACLED_API_KEY=
-ACLED_EMAIL=
-IOM_DTM_BASE_URL=
-IOM_DTM_API_KEY=
-DHIS2_BASE_URL=
-DHIS2_USERNAME=
-DHIS2_PASSWORD=
+GOOGLE\\\\\\\_AI\\\\\\\_API\\\\\\\_KEY=
+NEO4J\\\\\\\_URI=bolt://...
+NEO4J\\\\\\\_USER=
+NEO4J\\\\\\\_PASSWORD=
+SUPABASE\\\\\\\_URL=
+AFRO\\\\\\\_SENTINEL\\\\\\\_SERVICE\\\\\\\_KEY=
+NEON\\\\\\\_DATABASE\\\\\\\_URL=
+OLLAMA\\\\\\\_BASE\\\\\\\_URL=http://localhost:11434
+ACLED\\\\\\\_API\\\\\\\_KEY=
+ACLED\\\\\\\_EMAIL=
+IOM\\\\\\\_DTM\\\\\\\_BASE\\\\\\\_URL=
+IOM\\\\\\\_DTM\\\\\\\_API\\\\\\\_KEY=
+DHIS2\\\\\\\_BASE\\\\\\\_URL=
+DHIS2\\\\\\\_USERNAME=
+DHIS2\\\\\\\_PASSWORD=
 ```
 
 Missing required credentials cause hard throws on startup. The engine does not silently degrade.
 
----
+\---
 
 ## Getting started
 
@@ -311,31 +311,31 @@ Visit `http://localhost:3000` — the app boots, checks all connections, and ren
 Check diagnostic status at `/api/diagnostics`.  
 Trigger a manual ingest run: `POST /api/ingest/run`.
 
----
+\---
 
 ## What this system will never do
 
-- Identify individuals
-- Track devices
-- Use biometric data
-- Return mock data when live credentials are missing
-- Fabricate a Trinity synthesis when models are offline
-- Persist signals without `runId`, `source`, and `sourceRecordId`
-- Say "this exact point is the crossing" when the math means "82% probability mass along a 4–7 km segment"
+* Identify individuals
+* Track devices
+* Use biometric data
+* Return mock data when live credentials are missing
+* Fabricate a Trinity synthesis when models are offline
+* Persist signals without `runId`, `source`, and `sourceRecordId`
+* Say "this exact point is the crossing" when the math means "82% probability mass along a 4–7 km segment"
 
 The uncertainty is real. The evidence is real. The corridor is inferred — and that is stated clearly.
 
----
+\---
 
 ## Current active corridors (as of last run)
 
-| Corridor | Zone | Score | Status |
-|----------|------|-------|--------|
-| `CORRIDOR-KE-TZ-047` | Lwanda → Bunda (KE/TZ border) | 0.7887 | ◉ ACTIVE · HIGH |
-| `CORRIDOR-UG-CD-018` | Ishasha → Rutshuru (UG/CD border) | 0.5834 | ◉ ACTIVE · MEDIUM |
-| `CORRIDOR-TZ-MZ-031` | Songea → Lichinga (TZ/MZ border) | 0.2341 | ○ DORMANT · LOW |
+|Corridor|Zone|Score|Status|
+|-|-|-|-|
+|`CORRIDOR-KE-TZ-047`|Lwanda → Bunda (KE/TZ border)|0.7887|◉ ACTIVE · HIGH|
+|`CORRIDOR-UG-CD-018`|Ishasha → Rutshuru (UG/CD border)|0.5834|◉ ACTIVE · MEDIUM|
+|`CORRIDOR-TZ-MZ-031`|Songea → Lichinga (TZ/MZ border)|0.2341|○ DORMANT · LOW|
 
----
+\---
 
 ## Built by
 
@@ -345,15 +345,16 @@ System: `mo-border-phantom-001`
 Seal: `◉⟁⬡`  
 Workspace: `phantom-poe`
 
-> *Built from African intelligence — Ibibio grounding, Ubuntu ethics, Ifá logic.  
-> Not for Africa as an afterthought. From Africa, by design.*
+> \\\\\\\*Built from African intelligence — Ibibio grounding, Ubuntu ethics, Ifá logic.  
+> Not for Africa as an afterthought. From Africa, by design.\\\\\\\*
 
----
+\---
 
 ## License
 
 Apache-2.0 — see `LICENSE`
 
----
+\---
 
 *"Discover the corridor. Protect the continent."*
+

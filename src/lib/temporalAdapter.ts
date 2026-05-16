@@ -1,4 +1,3 @@
-<<<<<<< Updated upstream
 /**
  * MoStar Phantom XO — Temporal Adapter
  * moscript://codex/v1
@@ -9,12 +8,10 @@
  */
 
 import { queryNeon } from "@/integrations/neon/client";
-=======
-import { supabase } from "@/integrations/neon/client";
-import { getPublicApiHeaders, getTemporalApiUrl, isSupabaseFunctionUrl } from "@/lib/backendEndpoints";
->>>>>>> Stashed changes
+import { ITURI_CRISIS_CORRIDOR } from "@/data/ituri-crisis-corridor";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const ENABLE_NEON_TEMPORAL = import.meta.env.VITE_ENABLE_NEON_TEMPORAL === "true";
 
 // ── Row types ───────────────────────────────────────────────────────
 
@@ -102,6 +99,44 @@ const EVENT_INTENSITY: Record<string, number> = {
   RETURN_FLOW: 0.4,
   MILESTONE: 0.5,
 };
+
+function sourceForIturiEvidence(source: string, type: string): string {
+  const upper = source.toUpperCase();
+  if (upper.includes("IOM")) return "IOM-DTM";
+  if (upper.includes("AFRICA") || upper.includes("WHO") || type === "HEALTH") return "DHIS2";
+  if (upper.includes("OCHA") || upper.includes("AMNESTY") || type === "CONFLICT") return "ACLED";
+  return "AFRO-SENTINEL";
+}
+
+function buildIturiEvidenceSignals(): EvidenceSignal[] {
+  return ITURI_CRISIS_CORRIDOR.evidence.map((evidence) => ({
+    id: evidence.id,
+    cid: ITURI_CRISIS_CORRIDOR.id,
+    day: evidence.day,
+    timestamp: parseDate(evidence.timestamp),
+    lat: evidence.lat,
+    lng: evidence.lng,
+    src: sourceForIturiEvidence(evidence.source, evidence.type),
+    score: Math.round(evidence.score * 100),
+    desc: evidence.notes ?? `${evidence.source}: ${evidence.tag}`,
+    label: evidence.tag,
+    signalType: evidence.type,
+    flowVolume: evidence.affected ?? evidence.casualties ?? 0,
+    intensity: evidence.score,
+    source: evidence.source,
+  }));
+}
+
+function mergeStaticLiveSignals(signals: EvidenceSignal[]): EvidenceSignal[] {
+  const merged = [...signals];
+  const existingIds = new Set(merged.map((signal) => signal.id));
+
+  for (const signal of buildIturiEvidenceSignals()) {
+    if (!existingIds.has(signal.id)) merged.push(signal);
+  }
+
+  return merged.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+}
 
 let corridorAnchorsPromise: Promise<Map<string, CorridorAnchor>> | null = null;
 
@@ -284,6 +319,8 @@ function applyPerCorridorDayOffsets(signals: EvidenceSignal[]) {
 
   for (const corridorSignals of grouped.values()) {
     corridorSignals.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+    if (corridorSignals.some((signal) => signal.day !== 0)) continue;
+
     const start = corridorSignals[0]?.timestamp.getTime() ?? 0;
 
     for (const signal of corridorSignals) {
@@ -295,7 +332,14 @@ function applyPerCorridorDayOffsets(signals: EvidenceSignal[]) {
 // ── Public API ─────────────────────────────────────────────────────
 
 export async function fetchTemporalSignals(): Promise<EvidenceSignal[]> {
+  if (!ENABLE_NEON_TEMPORAL) {
+    const staticSignals = mergeStaticLiveSignals([]);
+    console.log(`[Temporal] Neon temporal disabled; using static live seed: ${staticSignals.length} evidence signals`);
+    return staticSignals;
+  }
+
   try {
+    console.log("[Temporal] Fetching signals from Neon...");
     const [flows, events, crossingPoints, corridorAnchors] = await Promise.all([
       fetchFlows(),
       fetchEvents(),
@@ -303,26 +347,31 @@ export async function fetchTemporalSignals(): Promise<EvidenceSignal[]> {
       loadCorridorAnchors(),
     ]);
 
+    console.log(`[Temporal] Loaded: ${flows.length} flows, ${events.length} events, ${crossingPoints.length} crossings, ${corridorAnchors.size} anchors`);
+
     const crossingsById = new Map(
       crossingPoints.map((crossing) => [crossing.id, crossing] as const)
     );
 
-    const signals = [
-      ...flows.map((flow) => buildFlowSignal(flow, corridorAnchors.get(flow.corridor_id))),
-      ...events.map((event) =>
-        buildEventSignal(
-          event,
-          event.crossing_point_id ? crossingsById.get(event.crossing_point_id) : undefined,
-          event.corridor_id ? corridorAnchors.get(event.corridor_id) : undefined
-        )
-      ),
-    ].sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+    const flowSignals = flows.map((flow) => buildFlowSignal(flow, corridorAnchors.get(flow.corridor_id)));
+    const eventSignals = events.map((event) =>
+      buildEventSignal(
+        event,
+        event.crossing_point_id ? crossingsById.get(event.crossing_point_id) : undefined,
+        event.corridor_id ? corridorAnchors.get(event.corridor_id) : undefined
+      )
+    );
+
+    const signals = mergeStaticLiveSignals([...flowSignals, ...eventSignals]);
 
     applyPerCorridorDayOffsets(signals);
+    console.log(`[Temporal] Built ${signals.length} evidence signals`);
     return signals;
   } catch (error) {
     console.error("[Temporal] Failed to fetch temporal signals:", error);
-    return [];
+    const fallbackSignals = mergeStaticLiveSignals([]);
+    console.log(`[Temporal] Using static live seed: ${fallbackSignals.length} evidence signals`);
+    return fallbackSignals;
   }
 }
 

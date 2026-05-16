@@ -1,10 +1,6 @@
 import { useEffect, useState } from "react";
 import { X, MapPin, Calendar, TrendingUp, AlertTriangle, ArrowRight, Shield, ShieldOff } from "lucide-react";
-<<<<<<< Updated upstream
 import { queryNeon } from "@/integrations/neon/client";
-=======
-import { supabase } from "@/integrations/neon/client";
->>>>>>> Stashed changes
 
 interface CorridorMeta {
   id: string;
@@ -201,18 +197,11 @@ export function CorridorDetailSidebar({ corridor, onClose }: Props) {
           <button
             key={t}
             onClick={() => setTab(t)}
-<<<<<<< Updated upstream
             className={`flex-1 px-3 py-2 text-xs font-mono transition-colors ${
               tab === t
                 ? "text-foreground border-b-2 border-phantom-green"
                 : "text-muted-foreground hover:text-foreground"
             }`}
-=======
-            className={`px-3 py-1.5 text-sm font-mono rounded transition-colors ${tab === t
-                ? "bg-primary/15 text-primary"
-                : "text-muted-foreground hover:text-foreground hover:bg-muted/30"
-              }`}
->>>>>>> Stashed changes
           >
             {t === "flows" ? `Flows (${flows.length})` :
              t === "events" ? `Events (${events.length})` :

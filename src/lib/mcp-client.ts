@@ -1,4 +1,3 @@
-<<<<<<< Updated upstream
 /**
  * MoStar Phantom XO — MCP Client
  * moscript://codex/v1
@@ -9,9 +8,6 @@
  */
 
 import { MCP_TOOLS, handleMcpTool } from "@/integrations/neon/api/mcp";
-=======
-import { supabase } from "@/integrations/neon/client";
->>>>>>> Stashed changes
 import type { MapParams } from "@/types/phantom";
 
 interface McpToolResult {

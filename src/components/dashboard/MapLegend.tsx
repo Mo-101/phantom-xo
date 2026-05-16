@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
-import { ChevronDown, ChevronUp, Play, Square, Layers, Eye, EyeOff } from "lucide-react";
+import { ChevronDown, ChevronUp, Layers, Eye, EyeOff, History, Radio, RefreshCw, Wifi, WifiOff, Clock, HelpCircle } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface CorridorMeta {
   id: string;
@@ -45,15 +50,29 @@ interface MapLegendProps {
   } | null;
   onComputeDrift?: (corridorId: string) => void;
   onClearDrift?: () => void;
+  // Mode & Live Monitoring
+  mode?: "historical" | "live";
+  onSetMode?: (mode: "historical" | "live") => void;
+  isCascadeEnabled?: boolean;
+  liveStatus?: {
+    connectionState: "idle" | "polling" | "error" | "stale";
+    lastFetchAt: Date | null;
+    lastSuccessfulFetchAt: Date | null;
+    newSignalsCount: number;
+    pollLatencyMs: number;
+    dataFreshnessSeconds: number;
+    errorMessage: string | null;
+  };
+  onRefreshLiveData?: () => void;
 }
 
 const LAYER_DEFS = [
-  { key: "corridors", label: "Corridors", color: "hsl(var(--phantom-green))" },
-  { key: "borders", label: "Borders", color: "#FFFFFF" },
-  { key: "labels", label: "Geo Labels", color: "#9CA3AF" },
-  { key: "officialPOEs", label: "Official POEs", color: "hsl(217, 91%, 60%)" },
-  { key: "evidence", label: "Evidence Signals", color: "hsl(var(--phantom-amber))" },
-  { key: "deviationAnalytics", label: "Deviation Heatline", color: "#EF4444" },
+  { key: "corridors", label: "Corridors", color: "hsl(var(--phantom-green))", tip: "Inferred phantom paths and paired formal routes currently drawn on the map." },
+  { key: "borders", label: "Borders", color: "#FFFFFF", tip: "Administrative border outlines used for geographic orientation." },
+  { key: "labels", label: "Geo Labels", color: "#9CA3AF", tip: "Country, region, city, and geographic reference labels." },
+  { key: "officialPOEs", label: "Official POEs", color: "hsl(217, 91%, 60%)", tip: "Known formal points of entry and monitored border gates." },
+  { key: "evidence", label: "Evidence Signals", color: "hsl(var(--phantom-amber))", tip: "Time-stamped signals from flows, events, health, conflict, and static live seeds." },
+  { key: "deviationAnalytics", label: "Deviation Heatline", color: "#EF4444", tip: "Selected-corridor analysis showing where phantom movement diverges from monitored roads." },
 ];
 
 const MapLegend = ({
@@ -77,6 +96,11 @@ const MapLegend = ({
   driftResult,
   onComputeDrift,
   onClearDrift,
+  mode = "historical",
+  onSetMode,
+  isCascadeEnabled = true,
+  liveStatus,
+  onRefreshLiveData,
 }: MapLegendProps) => {
   const [expanded, setExpanded] = useState(true);
   const [layersExpanded, setLayersExpanded] = useState(true);
@@ -97,7 +121,7 @@ const MapLegend = ({
   }, [selectedCorridorId, driftCorridorId]);
 
   return (
-    <div className="absolute bottom-4 right-4 z-10 animate-fade-in">
+    <div className="absolute bottom-4 left-4 z-10 animate-fade-in">
       <div className="bg-card/90 border border-border rounded-lg backdrop-blur-sm overflow-hidden min-w-[240px] max-h-[70vh] overflow-y-auto">
         <button
           onClick={() => setExpanded(!expanded)}
@@ -109,45 +133,166 @@ const MapLegend = ({
 
         {expanded && (
           <div className="px-3 pb-3 space-y-2 border-t border-border pt-2.5">
+            {/* MODE TOGGLE & STATUS */}
+            <div className="space-y-2">
+              {/* Mode Toggle */}
+              <div className="flex items-center gap-1 p-1 bg-muted/50 rounded-md">
+                <button
+                  onClick={() => onSetMode?.("historical")}
+                  className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs font-mono rounded transition-colors ${
+                    mode === "historical"
+                      ? "bg-card text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                  title="Historical: deterministic replay of loaded corridor and evidence data. Live polling is paused."
+                >
+                  <History className="w-3.5 h-3.5" />
+                  Historical
+                </button>
+                <button
+                  onClick={() => onSetMode?.("live")}
+                  className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs font-mono rounded transition-colors ${
+                    mode === "live"
+                      ? "bg-card text-phantom-green shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                  title="Live: polling mode for fresh signals. Historical replay controls are disabled."
+                >
+                  <Radio className="w-3.5 h-3.5" />
+                  Live
+                </button>
+              </div>
+
+              {/* Status Chip */}
+              {mode === "historical" ? (
+                <div
+                  className="flex items-center gap-2 px-2 py-1.5 bg-muted/30 rounded border border-border/50"
+                  title="Loaded evidence time span used by replay, cascade, animation, and historical analytics."
+                >
+                  <History className="w-3.5 h-3.5 text-muted-foreground" />
+                  <span className="text-xs font-mono text-muted-foreground">
+                    Historical Snapshot
+                  </span>
+                  <span className="text-[10px] text-muted-foreground/60 ml-auto">
+                    {rangeStart}–{rangeEnd}
+                  </span>
+                </div>
+              ) : liveStatus && (
+                <div
+                  className={`flex items-center gap-2 px-2 py-1.5 rounded border ${
+                  liveStatus.connectionState === "error"
+                    ? "bg-destructive/10 border-destructive/30"
+                    : liveStatus.connectionState === "stale"
+                    ? "bg-phantom-amber/10 border-phantom-amber/30"
+                    : liveStatus.connectionState === "polling"
+                    ? "bg-primary/10 border-primary/30"
+                    : "bg-phantom-green/10 border-phantom-green/30"
+                }`}
+                  title={liveStatus.errorMessage ?? "Live polling status, latest fetch latency, and new signal count."}
+                >
+                  {liveStatus.connectionState === "error" ? (
+                    <WifiOff className="w-3.5 h-3.5 text-destructive" />
+                  ) : liveStatus.connectionState === "stale" ? (
+                    <Clock className="w-3.5 h-3.5 text-phantom-amber" />
+                  ) : liveStatus.connectionState === "polling" ? (
+                    <RefreshCw className="w-3.5 h-3.5 text-primary animate-spin" />
+                  ) : (
+                    <Wifi className="w-3.5 h-3.5 text-phantom-green" />
+                  )}
+                  <span className={`text-xs font-mono ${
+                    liveStatus.connectionState === "error"
+                      ? "text-destructive"
+                      : liveStatus.connectionState === "stale"
+                      ? "text-phantom-amber"
+                      : liveStatus.connectionState === "polling"
+                      ? "text-primary"
+                      : "text-phantom-green"
+                  }`}>
+                    {liveStatus.connectionState === "error"
+                      ? "Connection Error"
+                      : liveStatus.connectionState === "stale"
+                      ? `Stale (${liveStatus.dataFreshnessSeconds}s)`
+                      : liveStatus.connectionState === "polling"
+                      ? "Refreshing..."
+                      : "Live Refreshing"}
+                  </span>
+                  {liveStatus.newSignalsCount > 0 && (
+                    <span className="text-[10px] px-1.5 py-0.5 bg-primary/20 text-primary rounded-full">
+                      +{liveStatus.newSignalsCount}
+                    </span>
+                  )}
+                  <button
+                    onClick={onRefreshLiveData}
+                    className="ml-auto p-1 hover:bg-white/10 rounded transition-colors"
+                    title="Manual refresh"
+                  >
+                    <RefreshCw className="w-3 h-3 text-muted-foreground" />
+                  </button>
+                </div>
+              )}
+
+              {/* Latency / Freshness Detail */}
+              {mode === "live" && liveStatus?.lastSuccessfulFetchAt && (
+                <div className="flex items-center justify-between text-[10px] font-mono text-muted-foreground/70 px-1">
+                  <span>Latency: {liveStatus.pollLatencyMs}ms</span>
+                  <span>Fresh: {liveStatus.dataFreshnessSeconds}s ago</span>
+                </div>
+              )}
+            </div>
+
             {/* UNMONITORED — Phantom corridors */}
-            <p className="text-xs font-mono text-[hsl(var(--phantom-amber))] uppercase tracking-wider font-semibold">
-              Phantom Corridors
-            </p>
+            <PanelLabel
+              label="Phantom Corridors"
+              className="text-[hsl(var(--phantom-amber))] pt-2 border-t border-border"
+              tip="Unmonitored or under-monitored routes inferred from corridor geometry and evidence."
+            />
             <LegendItem
               label="Detected route \u2014 risk gradient"
               swatch={<GradientBarSwatch />}
+              tip="Route color encodes relative risk along the detected phantom path."
             />
             <LegendItem
               label="Phantom crossing point"
               swatch={<PhantomPoeSwatch />}
+              tip="Inferred crossing node outside or beside formal monitoring infrastructure."
             />
 
             {/* MONITORED — Formal routes */}
             <div className="pt-2 mt-1.5 border-t border-border">
-              <p className="text-xs font-mono text-[hsl(217,91%,60%)] uppercase tracking-wider font-semibold mb-1.5">
-                Formal Routes
-              </p>
+              <PanelLabel
+                label="Formal Routes"
+                className="text-[hsl(217,91%,60%)] mb-1.5"
+                tip="Road-snapped official routes, formal gates, and monitored flow points paired against phantom movement."
+              />
               <LegendItem
                 label="Official route \u2014 monitored"
                 swatch={<FormalLineSwatch />}
+                tip="Known route with formal road or border monitoring."
               />
               <LegendItem
                 label="Official gate"
                 swatch={<GateSwatch />}
+                tip="Recognized official gate or checkpoint on the formal network."
               />
               <LegendItem
                 label="IOM FMP"
                 swatch={<FmpSwatch />}
+                tip="IOM flow monitoring point used as a formal observation anchor."
               />
             </div>
 
             {/* Coverage gap */}
             {corridorsLoaded && coverageStats && (
               <div className="pt-2 mt-1.5 border-t border-border">
-                <p className="text-xs font-mono text-muted-foreground uppercase tracking-wider mb-2">
-                  Coverage Gap
-                </p>
-                <div className="flex h-3 rounded-full overflow-hidden border border-border">
+                <PanelLabel
+                  label="Coverage Gap"
+                  className="text-muted-foreground mb-2"
+                  tip="Blue is monitored formal coverage. Red is estimated hidden or unmonitored corridor exposure."
+                />
+                <div
+                  className="flex h-3 rounded-full overflow-hidden border border-border"
+                  title={`${coverageStats.monitoredPct}% monitored, ${coverageStats.unmonitoredPct}% hidden across ${coverageStats.totalCorridors} corridors.`}
+                >
                   <div
                     className="bg-[hsl(217,91%,60%)]"
                     style={{ width: `${coverageStats.monitoredPct}%` }}
@@ -163,7 +308,10 @@ const MapLegend = ({
                   <span className="text-xs font-mono text-[hsl(217,91%,60%)]">{coverageStats.monitoredPct}% monitored</span>
                   <span className="text-xs font-mono text-destructive">{coverageStats.unmonitoredPct}% hidden</span>
                 </div>
-                <p className="text-xs font-mono text-muted-foreground tabular-nums mt-1">
+                <p
+                  className="text-xs font-mono text-muted-foreground tabular-nums mt-1"
+                  title="Total corridor count plus summed phantom and formal route distance currently loaded."
+                >
                   {coverageStats.totalCorridors} corridors \u00b7 {coverageStats.totalPhantomKm.toLocaleString()} km phantom \u00b7 {coverageStats.totalFormalKm.toLocaleString()} km formal
                 </p>
               </div>
@@ -179,6 +327,7 @@ const MapLegend = ({
                   <span className="flex items-center gap-1.5">
                     <Layers className="w-3 h-3" />
                     Layers
+                    <InfoTip text="Toggle map layer groups without changing the underlying loaded data." />
                   </span>
                   {layersExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                 </button>
@@ -193,6 +342,7 @@ const MapLegend = ({
                       return (
                         <button
                           key={layer.key}
+                          title={layer.tip}
                           onClick={() => {
                             if (layer.key === "evidence") {
                               onToggleEvidence?.();
@@ -225,149 +375,6 @@ const MapLegend = ({
                 )}
               </div>
             )}
-
-            {/* Cascade controls */}
-            {onStartCascade && corridorsMeta.length > 0 && (
-              <div className="pt-2 mt-1.5 border-t border-border space-y-1.5">
-                <p className="text-xs font-mono text-muted-foreground uppercase tracking-wider mb-1.5">
-                  Cascade Replay
-                </p>
-                <select
-                  value={cascadeCorridorId}
-                  onChange={(e) => setCascadeCorridorId(e.target.value)}
-                  aria-label="Select corridor for cascade replay"
-                  className="w-full text-xs font-mono bg-background border border-border rounded px-2 py-1.5 text-foreground/80"
-                  disabled={cascadeActive}
-                >
-                  <option value="">Select corridor\u2026</option>
-                  {corridorsMeta.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} ({c.risk})
-                    </option>
-                  ))}
-                </select>
-                <div className="flex gap-1.5">
-                  <button
-                    onClick={() => cascadeCorridorId && onStartCascade(cascadeCorridorId)}
-                    disabled={!cascadeCorridorId || cascadeActive}
-                    className="flex items-center gap-1 px-2.5 py-1 text-xs font-mono rounded bg-[hsl(var(--phantom-green))]/20 text-[hsl(var(--phantom-green))] hover:bg-[hsl(var(--phantom-green))]/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                  >
-                    <Play className="w-3 h-3" />
-                    Play
-                  </button>
-                  {cascadeActive && onStopCascade && (
-                    <button
-                      onClick={onStopCascade}
-                      className="flex items-center gap-1 px-2.5 py-1 text-xs font-mono rounded bg-destructive/20 text-destructive hover:bg-destructive/30 transition-colors"
-                    >
-                      <Square className="w-3 h-3" />
-                      Stop
-                    </button>
-                  )}
-                </div>
-                <div className="pt-1">
-                  <div className="text-[10px] font-mono text-muted-foreground mb-1">
-                    {activeDate
-                      ? activeDate.toLocaleDateString("en-GB", { month: "short", year: "numeric" })
-                      : rangeStart}
-                  </div>
-                  <input
-                    type="range"
-                    min={0}
-                    max={100}
-                    value={scrubberPosition}
-                    title="Scrub cascade replay timeline"
-                    placeholder="Scrub timeline"
-                    onChange={(e) => onScrub?.(cascadeCorridorId, Number(e.target.value))}
-                    disabled={!cascadeCorridorId}
-                    className="w-full accent-red-500 disabled:opacity-40"
-                  />
-                  <div className="flex justify-between mt-1 text-[9px] font-mono text-muted-foreground">
-                    <span>{rangeStart}</span>
-                    <span>{rangeEnd}</span>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Drift controls */}
-            {onComputeDrift && corridorsMeta.length > 0 && (
-              <div className="pt-2 mt-1.5 border-t border-border space-y-1.5">
-                <p className="text-xs font-mono text-muted-foreground uppercase tracking-wider mb-1.5">
-                  Predictive Drift
-                </p>
-                <select
-                  value={driftCorridorId}
-                  onChange={(e) => setDriftCorridorId(e.target.value)}
-                  aria-label="Select corridor for predictive drift analysis"
-                  className="w-full text-xs font-mono bg-background border border-border rounded px-2 py-1.5 text-foreground/80"
-                >
-                  <option value="">Select corridor\u2026</option>
-                  {corridorsMeta.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} ({c.risk})
-                    </option>
-                  ))}
-                </select>
-                <div className="flex gap-1.5">
-                  <button
-                    onClick={() => driftCorridorId && onComputeDrift(driftCorridorId)}
-                    disabled={!driftCorridorId}
-                    className="px-2.5 py-1 text-xs font-mono rounded bg-[hsl(var(--phantom-amber))]/20 text-[hsl(var(--phantom-amber))] hover:bg-[hsl(var(--phantom-amber))]/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                  >
-                    Run Drift
-                  </button>
-                  {driftResult && onClearDrift && (
-                    <button
-                      onClick={onClearDrift}
-                      className="px-2.5 py-1 text-xs font-mono rounded bg-muted/30 text-muted-foreground hover:bg-muted/40 transition-colors"
-                    >
-                      Clear
-                    </button>
-                  )}
-                </div>
-
-                {driftResult && (
-                  <div className="mt-1.5 p-2 rounded border border-border bg-muted/15 space-y-1.5">
-                    <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] font-mono">
-                      <span className="text-muted-foreground">Confidence</span>
-                      <span className="text-foreground tabular-nums text-right">
-                        {(driftResult.confidence * 100).toFixed(1)}%
-                      </span>
-                      <span className="text-muted-foreground">Activation</span>
-                      <span className="text-foreground tabular-nums text-right">
-                        {(driftResult.activationLikelihood * 100).toFixed(1)}%
-                      </span>
-                      <span className="text-muted-foreground">Avg shift</span>
-                      <span className="text-foreground tabular-nums text-right">
-                        {driftResult.avgMagnitudeKm.toFixed(1)} km
-                      </span>
-                      <span className="text-muted-foreground">Bearing</span>
-                      <span className="text-foreground tabular-nums text-right">
-                        {Math.round(driftResult.bearingDeg)}\u00b0
-                      </span>
-                    </div>
-                    {driftResult.drivers.length > 0 && (
-                      <div className="pt-1 border-t border-border">
-                        <p className="text-[9px] font-mono text-muted-foreground uppercase tracking-wider mb-1">
-                          Top Drivers
-                        </p>
-                        <div className="space-y-0.5">
-                          {driftResult.drivers.slice(0, 3).map((d) => (
-                            <div key={d.name} className="flex items-center justify-between text-[10px] font-mono">
-                              <span className="text-foreground/80 truncate pr-2">{d.name}</span>
-                              <span className="text-muted-foreground tabular-nums">
-                                {(d.weight * 100).toFixed(0)}%
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
           </div>
         )}
       </div>
@@ -377,12 +384,35 @@ const MapLegend = ({
 
 /* \u2500\u2500 Legend swatch components \u2500\u2500 */
 
-function LegendItem({ label, swatch }: { label: string; swatch: React.ReactNode }) {
+function LegendItem({ label, swatch, tip }: { label: string; swatch: React.ReactNode; tip: string }) {
   return (
-    <div className="flex items-center gap-2 text-sm font-mono text-foreground/80">
+    <div className="flex items-center gap-2 text-sm font-mono text-foreground/80" title={tip}>
       <div className="w-5 flex-shrink-0 flex items-center justify-center">{swatch}</div>
       <span>{label}</span>
+      <InfoTip text={tip} />
     </div>
+  );
+}
+
+function PanelLabel({ label, tip, className = "" }: { label: string; tip: string; className?: string }) {
+  return (
+    <p className={`text-xs font-mono uppercase tracking-wider font-semibold flex items-center gap-1.5 ${className}`}>
+      <span>{label}</span>
+      <InfoTip text={tip} />
+    </p>
+  );
+}
+
+function InfoTip({ text }: { text: string }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <HelpCircle className="w-3 h-3 text-muted-foreground/50 hover:text-foreground/80 shrink-0" />
+      </TooltipTrigger>
+      <TooltipContent side="right" className="max-w-[260px] text-xs font-mono leading-relaxed">
+        {text}
+      </TooltipContent>
+    </Tooltip>
   );
 }
 

@@ -1,4 +1,5 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
+import type { CorridorAnalysisResult, SignalSummary, MapParams } from "@/types/phantom";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
 import { MapArea } from "@/components/dashboard/MapArea";
 import { ChatPanel } from "@/components/dashboard/ChatPanel";
@@ -6,11 +7,9 @@ import { CorridorOverlay } from "@/components/dashboard/CorridorOverlay";
 import { RadarIndicator } from "@/components/dashboard/RadarIndicator";
 import { SignalBadge } from "@/components/dashboard/SignalBadge";
 import { CorridorIntelPanel } from "@/components/dashboard/CorridorIntelPanel";
-import type { CorridorAnalysisResult, SignalSummary, MapParams } from "@/types/phantom";
 import type { useMapboxMap } from "@/hooks/useMapboxMap";
 
 const Index = () => {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [radarActive, setRadarActive] = useState(false);
   const [monitoredId, setMonitoredId] = useState<string | null>(null);
   const [corridorAnalysis, setCorridorAnalysis] = useState<CorridorAnalysisResult | null>(null);
@@ -64,15 +63,11 @@ const Index = () => {
           {radarActive && <RadarIndicator monitoredId={monitoredId} />}
           {corridorAnalysis && <CorridorOverlay analysis={corridorAnalysis} />}
           {signalData && <SignalBadge data={signalData} />}
+
+          {/* Floating Chat Panel */}
+          <ChatPanel onMapQuery={handleMapQuery} />
         </div>
       </div>
-
-      {/* Chat sidebar */}
-      <ChatPanel
-        collapsed={sidebarCollapsed}
-        onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
-        onMapQuery={handleMapQuery}
-      />
     </div>
   );
 };

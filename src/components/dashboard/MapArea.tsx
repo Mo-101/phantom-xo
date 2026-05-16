@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect } from "react";
-import { Activity, Globe, Play, Square } from "lucide-react";
+import { Activity, Globe, Play, Square, Radar, Sparkles } from "lucide-react";
 import { useMapboxMap } from "@/hooks/useMapboxMap";
 import { MapLegend } from "./MapLegend";
 
@@ -101,28 +101,33 @@ const MapArea = ({ onMapReady }: MapAreaProps) => {
           driftResult={mb.driftResult}
           onComputeDrift={mb.computeDriftForCorridor}
           onClearDrift={mb.clearDrift}
+          mode={mb.mode}
+          onSetMode={mb.setMode}
+          isCascadeEnabled={mb.isCascadeEnabled}
+          liveStatus={mb.liveStatus}
+          onRefreshLiveData={mb.refreshLiveData}
         />
       )}
 
       {/* Cascade HUD */}
-      {mb.cascadeState?.active && (
+      {mb.mode === "historical" && mb.cascadeState?.active && (
         <div className="absolute top-16 left-1/2 -translate-x-1/2 z-10 animate-fade-in-up">
           <div className="bg-card/90 border border-phantom-green/30 rounded-lg backdrop-blur-sm px-5 py-3 flex items-center gap-6">
-            <div className="text-center">
+            <div className="text-center" title="Current cascade replay day for the selected corridor.">
               <p className="text-[9px] font-mono text-muted-foreground uppercase tracking-wider">Day</p>
               <p className="text-lg font-mono text-phantom-green tabular-nums">
                 {mb.cascadeState.day}
               </p>
             </div>
             <div className="w-px h-8 bg-border" />
-            <div className="text-center">
+            <div className="text-center" title="Number of evidence points revealed at the current cascade replay position.">
               <p className="text-[9px] font-mono text-muted-foreground uppercase tracking-wider">Signals</p>
               <p className="text-lg font-mono text-foreground tabular-nums">
                 {mb.cascadeState.signalsRevealed}
               </p>
             </div>
             <div className="w-px h-8 bg-border" />
-            <div className="text-center">
+            <div className="text-center" title="Cumulative replay score from evidence revealed so far.">
               <p className="text-[9px] font-mono text-muted-foreground uppercase tracking-wider">Score</p>
               <p className="text-lg font-mono text-phantom-amber tabular-nums">
                 {mb.cascadeState.cumulativeScore.toFixed(0)}
@@ -132,9 +137,111 @@ const MapArea = ({ onMapReady }: MapAreaProps) => {
         </div>
       )}
 
-      {/* Corridor animation time display */}
+      {/* Action buttons: Animate / Cascade / Predictive */}
       {mb.mapReady && (
-        <div className="absolute bottom-12 left-1/2 -translate-x-1/2 z-10">
+        <div className="absolute bottom-12 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2">
+          {/* Animate (Historical only) */}
+          <button
+            onClick={mb.corridorAnimState?.active ? mb.stopCorridorAnim : mb.startCorridorAnim}
+            disabled={mb.mode !== "historical"}
+            className={`bg-card/80 border rounded-lg backdrop-blur-sm px-4 py-2 flex items-center gap-2 transition-all group ${
+              mb.mode !== "historical"
+                ? "border-border/30 opacity-40 cursor-not-allowed"
+                : mb.corridorAnimState?.active
+                  ? "border-red-500/40 hover:bg-card/95"
+                  : "border-phantom-green/20 hover:border-phantom-green/50 hover:bg-card/95"
+            }`}
+            title={mb.mode !== "historical" ? "Animate is available in Historical mode" : "Animate corridor build-up"}
+          >
+            {mb.corridorAnimState?.active ? (
+              <Square className="w-3.5 h-3.5 text-red-400" />
+            ) : (
+              <Play className="w-3.5 h-3.5 text-phantom-green/60 group-hover:text-phantom-green transition-colors" />
+            )}
+            <span className="text-[10px] font-mono text-foreground/80 uppercase tracking-wider">
+              Animate
+            </span>
+          </button>
+
+          {/* Cascade Replay (Historical only, requires corridor selection) */}
+          <button
+            onClick={() => {
+              if (mb.mode !== "historical") return;
+              if (mb.cascadeState?.active) {
+                mb.stopCascade();
+                return;
+              }
+              if (mb.selectedCorridorId) mb.startCascade(mb.selectedCorridorId);
+            }}
+            disabled={
+              mb.mode !== "historical" ||
+              (!mb.selectedCorridorId && !mb.cascadeState?.active) ||
+              (!mb.cascadeState?.active && (mb.selectedCorridorEvidenceCount ?? 0) === 0)
+            }
+            className={`bg-card/80 border rounded-lg backdrop-blur-sm px-4 py-2 flex items-center gap-2 transition-all group ${
+              mb.mode !== "historical"
+                ? "border-border/30 opacity-40 cursor-not-allowed"
+                : !mb.selectedCorridorId && !mb.cascadeState?.active
+                  ? "border-border/30 opacity-40 cursor-not-allowed"
+                  : mb.cascadeState?.active
+                    ? "border-destructive/40 hover:bg-card/95"
+                    : "border-phantom-amber/30 hover:border-phantom-amber/60 hover:bg-card/95"
+            }`}
+            title={
+              mb.mode !== "historical"
+                ? "Cascade is available in Historical mode"
+                : mb.selectedCorridorId
+                  ? (mb.selectedCorridorEvidenceCount ?? 0) > 0
+                    ? "Replay evidence cascade for selected corridor"
+                    : "No evidence matched this corridor (ID mismatch or empty data)"
+                  : "Select a corridor to enable cascade"
+            }
+          >
+            <Radar className={`w-3.5 h-3.5 ${mb.cascadeState?.active ? "text-destructive" : "text-phantom-amber"}`} />
+            <span className="text-[10px] font-mono text-foreground/80 uppercase tracking-wider">
+              Cascade
+            </span>
+          </button>
+
+          {/* Predictive (Historical only, requires corridor selection) */}
+          <button
+            onClick={() => {
+              if (mb.mode !== "historical") return;
+              if (mb.driftResult) {
+                mb.clearDrift();
+                return;
+              }
+              if (mb.selectedCorridorId) mb.computeDriftForCorridor(mb.selectedCorridorId);
+            }}
+            disabled={mb.mode !== "historical" || (!mb.selectedCorridorId && !mb.driftResult)}
+            className={`bg-card/80 border rounded-lg backdrop-blur-sm px-4 py-2 flex items-center gap-2 transition-all group ${
+              mb.mode !== "historical"
+                ? "border-border/30 opacity-40 cursor-not-allowed"
+                : !mb.selectedCorridorId && !mb.driftResult
+                  ? "border-border/30 opacity-40 cursor-not-allowed"
+                  : mb.driftResult
+                    ? "border-muted/30 hover:bg-card/95"
+                    : "border-primary/30 hover:border-primary/60 hover:bg-card/95"
+            }`}
+            title={
+              mb.mode !== "historical"
+                ? "Predictive is available in Historical mode"
+                : mb.selectedCorridorId
+                  ? "Compute predictive drift for selected corridor"
+                  : "Select a corridor to enable predictive"
+            }
+          >
+            <Sparkles className={`w-3.5 h-3.5 ${mb.driftResult ? "text-muted-foreground" : "text-primary"}`} />
+            <span className="text-[10px] font-mono text-foreground/80 uppercase tracking-wider">
+              Predictive
+            </span>
+          </button>
+        </div>
+      )}
+
+      {/* Corridor animation time display */}
+      {mb.mode === "historical" && mb.mapReady && (
+        <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-10">
           {mb.corridorAnimState?.active ? (
             <div className="bg-card/90 border border-phantom-green/30 rounded-lg backdrop-blur-sm px-5 py-3 flex flex-col gap-2 animate-fade-in-up min-w-[360px]">
               <div className="flex items-center gap-3">
@@ -145,10 +252,16 @@ const MapArea = ({ onMapReady }: MapAreaProps) => {
                 >
                   <Square className="w-2.5 h-2.5 text-red-400" />
                 </button>
-                <p className="text-sm font-mono text-phantom-green tabular-nums flex-1">
+                <p
+                  className="text-sm font-mono text-phantom-green tabular-nums flex-1"
+                  title="Current simulated replay date in the historical corridor animation."
+                >
                   {mb.corridorAnimState.dateLabel}
                 </p>
-                <p className="text-sm font-mono text-phantom-green/70 tabular-nums">
+                <p
+                  className="text-sm font-mono text-phantom-green/70 tabular-nums"
+                  title="Percent of the historical animation timeline already played."
+                >
                   {Math.round(mb.corridorAnimState.progress * 100)}%
                 </p>
               </div>
@@ -158,7 +271,10 @@ const MapArea = ({ onMapReady }: MapAreaProps) => {
                   style={{ width: `${(mb.corridorAnimState.progress * 100).toFixed(1)}%` }}
                 />
               </div>
-              <div className="flex items-center justify-between text-[9px] font-mono uppercase tracking-wider text-muted-foreground">
+              <div
+                className="flex items-center justify-between text-[9px] font-mono uppercase tracking-wider text-muted-foreground"
+                title="Timeline breakdown for the current corridor animation position."
+              >
                 <span className="tabular-nums">{mb.corridorAnimState.dayLabel}</span>
                 <span className="text-phantom-green/50">·</span>
                 <span className="tabular-nums">{mb.corridorAnimState.weekLabel}</span>
@@ -169,21 +285,16 @@ const MapArea = ({ onMapReady }: MapAreaProps) => {
               </div>
             </div>
           ) : (
-            <button
-              onClick={mb.startCorridorAnim}
-              className="bg-card/80 border border-phantom-green/20 rounded-lg backdrop-blur-sm px-4 py-2 flex items-center gap-2 hover:border-phantom-green/50 hover:bg-card/95 transition-all group"
-            >
-              <Play className="w-3.5 h-3.5 text-phantom-green/60 group-hover:text-phantom-green transition-colors" />
-              <span className="text-[10px] font-mono text-phantom-green/60 group-hover:text-phantom-green/90 uppercase tracking-wider transition-colors">
-                Animate Corridors
-              </span>
-            </button>
+            <div />
           )}
         </div>
       )}
 
       {/* Live coordinate readout */}
-      <div className="absolute bottom-4 left-4 z-10 flex items-center gap-3 text-[10px] font-mono text-muted-foreground/60 tabular-nums">
+      <div
+        className="absolute bottom-4 left-4 z-10 flex items-center gap-3 text-[10px] font-mono text-muted-foreground/60 tabular-nums"
+        title="Current map camera center latitude, longitude, and zoom."
+      >
         <span>LAT {coords.lat.toFixed(4)}</span>
         <span>LNG {coords.lng.toFixed(4)}</span>
         <span>Z {coords.zoom.toFixed(1)}</span>

@@ -8,6 +8,12 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
+    proxy: {
+      "/ollama": {
+        target: process.env.VITE_OLLAMA_HOST || "http://localhost:11434",
+        changeOrigin: true,
+      },
+    },
     hmr: {
       overlay: false,
     },

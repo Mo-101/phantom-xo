@@ -1,31 +1,18 @@
-import { supabase } from "@/integrations/neon/client";
-import { getOllamChatApiUrl, getPublicApiHeaders, isSupabaseFunctionUrl } from "@/lib/backendEndpoints";
+import { getOllamChatApiUrl, getPublicApiHeaders } from "@/lib/backendEndpoints";
 
 type Msg = { role: "user" | "assistant"; content: string };
 
 const CHAT_URL = getOllamChatApiUrl();
+
+function isOllamaNativeChatUrl(url: string) {
+  return /\/api\/chat\/?$/.test(url);
+}
 
 async function getChatHeaders(url: string): Promise<Record<string, string>> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...getPublicApiHeaders(),
   };
-
-  if (isSupabaseFunctionUrl(url)) {
-    const apikey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined;
-    if (apikey) {
-      headers.apikey = apikey;
-      headers.Authorization = `Bearer ${apikey}`;
-    }
-
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    if (session?.access_token) {
-      headers.Authorization = `Bearer ${session.access_token}`;
-    }
-  }
 
   return headers;
 }
@@ -43,10 +30,30 @@ export async function streamOllam({
   onDone: () => void;
   signal?: AbortSignal;
 }) {
+  if (!CHAT_URL) {
+    throw new Error(
+      "Ollama chat URL not configured. Set VITE_OLLAMA_HOST (e.g. http://localhost:11434) or VITE_API_OLLAM_CHAT_URL."
+    );
+  }
+
+  const isNative = isOllamaNativeChatUrl(CHAT_URL);
+  const model = (import.meta.env.VITE_OLLAMA_MODEL as string | undefined) || "";
+
+  const body = isNative
+    ? {
+        model,
+        messages,
+        stream: true,
+      }
+    : {
+        messages,
+        thinking,
+      };
+
   const resp = await fetch(CHAT_URL, {
     method: "POST",
     headers: await getChatHeaders(CHAT_URL),
-    body: JSON.stringify({ messages, thinking }),
+    body: JSON.stringify(body),
     signal,
   });
 
@@ -73,22 +80,42 @@ export async function streamOllam({
       buf = buf.slice(nl + 1);
 
       if (line.endsWith("\r")) line = line.slice(0, -1);
-      if (line.startsWith(":") || line.trim() === "") continue;
-      if (!line.startsWith("data: ")) continue;
+      if (!line.trim()) continue;
 
-      const json = line.slice(6).trim();
-      if (json === "[DONE]") {
-        streamDone = true;
-        break;
-      }
+      if (isNative) {
+        try {
+          const parsed = JSON.parse(line) as {
+            message?: { content?: string };
+            done?: boolean;
+          };
+          const content = parsed.message?.content;
+          if (content) onDelta(content);
+          if (parsed.done) {
+            streamDone = true;
+            break;
+          }
+        } catch {
+          buf = line + "\n" + buf;
+          break;
+        }
+      } else {
+        if (line.startsWith(":") || line.trim() === "") continue;
+        if (!line.startsWith("data: ")) continue;
 
-      try {
-        const parsed = JSON.parse(json);
-        const content = parsed.choices?.[0]?.delta?.content as string | undefined;
-        if (content) onDelta(content);
-      } catch {
-        buf = line + "\n" + buf;
-        break;
+        const json = line.slice(6).trim();
+        if (json === "[DONE]") {
+          streamDone = true;
+          break;
+        }
+
+        try {
+          const parsed = JSON.parse(json);
+          const content = parsed.choices?.[0]?.delta?.content as string | undefined;
+          if (content) onDelta(content);
+        } catch {
+          buf = line + "\n" + buf;
+          break;
+        }
       }
     }
   }
@@ -97,15 +124,27 @@ export async function streamOllam({
     for (let raw of buf.split("\n")) {
       if (!raw) continue;
       if (raw.endsWith("\r")) raw = raw.slice(0, -1);
-      if (!raw.startsWith("data: ")) continue;
-      const json = raw.slice(6).trim();
-      if (json === "[DONE]") continue;
-      try {
-        const parsed = JSON.parse(json);
-        const content = parsed.choices?.[0]?.delta?.content as string | undefined;
-        if (content) onDelta(content);
-      } catch {
-        // ignore partial frame
+      if (!raw.trim()) continue;
+
+      if (isNative) {
+        try {
+          const parsed = JSON.parse(raw) as { message?: { content?: string } };
+          const content = parsed.message?.content;
+          if (content) onDelta(content);
+        } catch {
+          // ignore partial frame
+        }
+      } else {
+        if (!raw.startsWith("data: ")) continue;
+        const json = raw.slice(6).trim();
+        if (json === "[DONE]") continue;
+        try {
+          const parsed = JSON.parse(json);
+          const content = parsed.choices?.[0]?.delta?.content as string | undefined;
+          if (content) onDelta(content);
+        } catch {
+          // ignore partial frame
+        }
       }
     }
   }

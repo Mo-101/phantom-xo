@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import type { MapParams, CameraTarget } from "@/types/phantom";
@@ -13,19 +13,16 @@ import { createCascadeEngine, type CascadeState } from "./mapbox/cascadeEngine";
 import { createCorridorAnimator, type CorridorAnimState, type CorridorAnimator } from "./mapbox/corridorAnimator";
 import { getTemporalRange, type EvidenceSignal, type TemporalRange } from "@/lib/temporalAdapter";
 import { computeDrift, type DriftResult } from "./mapbox/driftEngine";
+import { poll } from "@/integrations/neon/api/poll";
 import { addDriftSources, addDriftLayers, updateDriftData, setDriftVisibility, DRIFT_LAYER_IDS } from "./mapbox/drawDriftLayers";
 import type { Vec2 } from "./mapbox/driftMath";
-<<<<<<< Updated upstream
 import { getComputeScoresApiUrl, getPublicApiHeaders } from "@/lib/backendEndpoints";
 import {
   drawDeviationAnalytics,
   removeDeviationAnalyticsLayers,
   toggleDeviationAnalyticsLayers,
 } from "./mapbox/drawDeviationAnalytics";
-=======
-import { getComputeScoresApiUrl, getPublicApiHeaders, isSupabaseFunctionUrl } from "@/lib/backendEndpoints";
-import { supabase } from "@/integrations/neon/client";
->>>>>>> Stashed changes
+import { ITURI_CRISIS_CORRIDOR, getIturiLineCoordinates } from "@/data/ituri-crisis-corridor";
 
 type BasemapMode = "custom" | "standard" | "standard-satellite";
 type LightPreset = "day" | "dawn" | "dusk" | "night";
@@ -115,7 +112,7 @@ export function useMapboxMap(containerRef: React.RefObject<HTMLDivElement | null
   const [corridorsMeta, setCorridorsMeta] = useState<CorridorMeta[]>([]);
   const [corridorsLoaded, setCorridorsLoaded] = useState(false);
   const [coverageStats, setCoverageStats] = useState<CoverageStats | null>(null);
-  const [evidenceVisible, setEvidenceVisible] = useState(false);
+  const [evidenceVisible, setEvidenceVisible] = useState(true);
   const [cascadeState, setCascadeState] = useState<CascadeState | null>(null);
   const [temporalRange, setTemporalRange] = useState<TemporalRange | null>(null);
   const [selectedCorridorId, setSelectedCorridorId] = useState<string | null>(null);
@@ -125,9 +122,42 @@ export function useMapboxMap(containerRef: React.RefObject<HTMLDivElement | null
   const corridorAnimRef = useRef<CorridorAnimator | null>(null);
   const [corridorAnimState, setCorridorAnimState] = useState<CorridorAnimState | null>(null);
   const phantomLayerIdsRef = useRef<string[]>([]);
+  const historicalEvidenceVisibleRef = useRef<boolean>(true);
+  const historicalEvidenceLayerVisRef = useRef<boolean>(true);
   const [driftResult, setDriftResult] = useState<DriftResult | null>(null);
   const corridorGeoRef = useRef<Map<string, Vec2[]>>(new Map());
   const formalGeoRef = useRef<Vec2[][]>([]);
+
+  const selectedCorridorEvidenceCount = useMemo(() => {
+    if (!selectedCorridorId) return 0;
+    const evidence = evidenceDataRef.current;
+    if (!evidence || evidence.length === 0) return 0;
+    return evidence.filter((s) => String(s.cid) === String(selectedCorridorId)).length;
+  }, [selectedCorridorId]);
+
+  // ── Mode & Live Monitoring State ──
+  type Mode = "historical" | "live";
+  const [mode, setMode] = useState<Mode>("historical");
+  const [liveStatus, setLiveStatus] = useState<{
+    connectionState: "idle" | "polling" | "error" | "stale";
+    lastFetchAt: Date | null;
+    lastSuccessfulFetchAt: Date | null;
+    newSignalsCount: number;
+    pollLatencyMs: number;
+    dataFreshnessSeconds: number;
+    errorMessage: string | null;
+  }>({
+    connectionState: "idle",
+    lastFetchAt: null,
+    lastSuccessfulFetchAt: null,
+    newSignalsCount: 0,
+    pollLatencyMs: 0,
+    dataFreshnessSeconds: 0,
+    errorMessage: null,
+  });
+  const lastSeenIngestedAtRef = useRef<string>(new Date(Date.now() - 60000).toISOString());
+  const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const liveSignalsRef = useRef<EvidenceSignal[]>([]);
 
   // Layer visibility — includes deviationAnalytics
   const [layerVisibility, setLayerVisibility] = useState<Record<string, boolean>>({
@@ -135,7 +165,7 @@ export function useMapboxMap(containerRef: React.RefObject<HTMLDivElement | null
     borders: true,
     labels: true,
     officialPOEs: true,
-    evidence: false,
+    evidence: true,
     deviationAnalytics: false,
   });
 
@@ -303,12 +333,22 @@ export function useMapboxMap(containerRef: React.RefObject<HTMLDivElement | null
       setCoverageStats(stats);
 
       phantomLayerIdsRef.current = phantomLayerIds;
-      corridorAnimRef.current = createCorridorAnimator(ctx.map, phantomLayerIds, meta.map(m => ({ id: m.id, km: m.km, risk: m.risk })));
 
       const { data, featureIds } = await drawEvidenceLayer(ctx);
       evidenceDataRef.current = data;
       featureIdsRef.current = featureIds;
-      setTemporalRange(getTemporalRange(data));
+      const range = getTemporalRange(data);
+      setTemporalRange(range);
+
+      corridorAnimRef.current = createCorridorAnimator(
+        ctx.map,
+        phantomLayerIds,
+        meta.map((m) => ({ id: m.id, km: m.km, risk: m.risk })),
+        { startDate: range.min, endDate: range.max }
+      );
+
+      // Make evidence visible immediately (default ON)
+      toggleEvidenceLayer(ctx.map, true);
 
       cascadeEngineRef.current = createCascadeEngine(ctx.map, data, featureIds);
 
@@ -325,6 +365,7 @@ export function useMapboxMap(containerRef: React.RefObject<HTMLDivElement | null
             formalGeoRef.current.push(f.geometry.coordinates as Vec2[]);
           }
         }
+        corridorGeoRef.current.set(ITURI_CRISIS_CORRIDOR.id, getIturiLineCoordinates() as Vec2[]);
       } catch { /* geometry cache is best-effort */ }
 
       // Add drift sources + layers
@@ -333,11 +374,57 @@ export function useMapboxMap(containerRef: React.RefObject<HTMLDivElement | null
       setDriftVisibility(ctx.map, false);
 
       setCorridorsLoaded(true);
-      console.log("[Mapbox] All layers loaded");
+      console.log(`[Mapbox] All layers loaded: ${meta.length} corridors, ${data.length} evidence signals (VISIBLE)`);
+      console.log(`[Mapbox] Evidence signals are now visible on map`);
+      console.log(`[Mapbox] Click "Animate Corridors" button (bottom center) to play corridor animation`);
+      console.log(`[Mapbox] Use Legend > Cascade Replay to play evidence cascade`);
     } catch (err) {
-      console.warn("[Mapbox] Failed to load layers:", err);
+      console.error("[Mapbox] Failed to load layers:", err);
     }
   }, [corridorsLoaded, getDrawContext]);
+
+  // ── Mode semantics (Historical vs Live) ──
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    if (mode === "live") {
+      // Preserve historical visibility state so switching back restores correctly.
+      historicalEvidenceVisibleRef.current = evidenceVisible;
+      historicalEvidenceLayerVisRef.current = layerVisibility.evidence;
+
+      // Live mode must not show or mutate historical replay state.
+      cascadeEngineRef.current?.stop();
+      cascadeEngineRef.current?.hideAll();
+      setCascadeState(null);
+
+      corridorAnimRef.current?.stop();
+      setCorridorAnimState(null);
+
+      // Hide historical evidence layer in Live mode (until live-layer merge is implemented)
+      toggleEvidenceLayer(map, false);
+      // Do NOT mutate evidenceVisible permanently; restore when back to historical.
+      setLayerVisibility((prev) => ({ ...prev, evidence: false }));
+
+      // Hide drift overlay (predictive) in Live mode
+      try {
+        setDriftVisibility(map, false);
+      } catch {
+        // best effort
+      }
+      setDriftResult(null);
+      return;
+    }
+
+    // Historical mode: restore evidence visibility according to state
+    // If we came from live mode, restore historical preference first.
+    setEvidenceVisible(historicalEvidenceVisibleRef.current);
+    setLayerVisibility((prev) => ({
+      ...prev,
+      evidence: historicalEvidenceLayerVisRef.current,
+    }));
+    toggleEvidenceLayer(map, historicalEvidenceVisibleRef.current);
+  }, [mode, evidenceVisible, layerVisibility.evidence]);
 
   const loadOfficialPOEs = useCallback(async () => {
     if (poesLoadedRef.current) return;
@@ -416,6 +503,8 @@ export function useMapboxMap(containerRef: React.RefObject<HTMLDivElement | null
 
   // ── Cascade controls ──
   const startCascade = useCallback((corridorId: string) => {
+    const evidenceCount = evidenceDataRef.current.filter((s) => String(s.cid) === String(corridorId)).length;
+    console.log(`[Cascade] start corridorId=${corridorId} matchedEvidence=${evidenceCount}`);
     cascadeEngineRef.current?.start(corridorId, (s) => {
       setCascadeState({ ...s });
     });
@@ -517,8 +606,11 @@ export function useMapboxMap(containerRef: React.RefObject<HTMLDivElement | null
     const map = mapRef.current;
     if (!map || !mapReady) return;
 
+    // Corridor-selection analytics are historical-only.
+    if (mode !== "historical") return;
+
     const onClick = (e: mapboxgl.MapMouseEvent) => {
-      const queryLayers = [...phantomLayerIdsRef.current, "formal-routes-line"].filter(id => map.getLayer(id));
+      const queryLayers = [...phantomLayerIdsRef.current, "formal-routes-line", "ituri-crisis-nodes-circle"].filter(id => map.getLayer(id));
       if (queryLayers.length === 0) {
         // No corridor layers exist yet — deselect
         setSelectedCorridorId(null);
@@ -531,6 +623,7 @@ export function useMapboxMap(containerRef: React.RefObject<HTMLDivElement | null
         const props = features[0].properties;
         const cid = props?.id ?? props?.corridor_id ?? null;
         if (cid) {
+          console.log(`[Selection] corridor click raw=${String(cid)} evidenceMatches=${evidenceDataRef.current.filter((s) => String(s.cid) === String(cid)).length}`);
           setSelectedCorridorId(cid);
           return;
         }
@@ -541,7 +634,7 @@ export function useMapboxMap(containerRef: React.RefObject<HTMLDivElement | null
 
     map.on("click", onClick);
     return () => { map.off("click", onClick); };
-  }, [mapReady]);
+  }, [mapReady, mode]);
 
   // ── Selected corridor → draw deviation analytics + auto-drift ──
   useEffect(() => {
@@ -574,7 +667,7 @@ export function useMapboxMap(containerRef: React.RefObject<HTMLDivElement | null
       // Auto-compute drift
       computeDriftForCorridor(selectedCorridorId);
     }
-  }, [selectedCorridorId, mapReady]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedCorridorId, mapReady, mode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Tooltip on hover ──
   useEffect(() => {
@@ -594,6 +687,7 @@ export function useMapboxMap(containerRef: React.RefObject<HTMLDivElement | null
       "iom-fmps-circle",
       "phantom-poes-circle",
       "official-poes-circle",
+      "ituri-crisis-nodes-circle",
     ];
 
     function buildTooltipHTML(props: Record<string, unknown>): string {
@@ -682,12 +776,106 @@ export function useMapboxMap(containerRef: React.RefObject<HTMLDivElement | null
     return () => cancelAnimationFrame(rafId);
   }, [mapReady]);
 
+  // ── Live Polling Effect ──
+  const POLL_INTERVAL_MS = 30000; // 30 seconds
+  const STALE_THRESHOLD_SECONDS = 120; // 2 minutes
+
+  const performPoll = useCallback(async () => {
+    const startTime = performance.now();
+    setLiveStatus((prev) => ({ ...prev, connectionState: "polling", lastFetchAt: new Date() }));
+
+    try {
+      const result = await poll({ since: lastSeenIngestedAtRef.current });
+      const latency = Math.round(performance.now() - startTime);
+
+      // Update last seen timestamp based on newest signal
+      if (result.signals.length > 0) {
+        const newest = result.signals.reduce((max, s) =>
+          s.timestamp > max ? s.timestamp : max, result.signals[0].timestamp
+        );
+        lastSeenIngestedAtRef.current = newest;
+      }
+
+      setLiveStatus((prev) => ({
+        ...prev,
+        connectionState: "idle",
+        lastSuccessfulFetchAt: new Date(),
+        newSignalsCount: result.signals.length,
+        pollLatencyMs: latency,
+        dataFreshnessSeconds: 0,
+        errorMessage: null,
+      }));
+
+      // TODO: Merge new signals into live layer (Phase 2 enhancement)
+      // For now, just track the count
+    } catch (err) {
+      setLiveStatus((prev) => ({
+        ...prev,
+        connectionState: "error",
+        pollLatencyMs: Math.round(performance.now() - startTime),
+        errorMessage: err instanceof Error ? err.message : "Poll failed",
+      }));
+    }
+  }, []);
+
+  // Manage polling lifecycle based on mode
+  useEffect(() => {
+    if (mode !== "live") {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+      return;
+    }
+
+    // Start polling immediately and set interval
+    performPoll();
+    pollingIntervalRef.current = setInterval(performPoll, POLL_INTERVAL_MS);
+
+    // Update freshness timer
+    const freshnessInterval = setInterval(() => {
+      setLiveStatus((prev) => {
+        const secondsSinceLastSuccess = prev.lastSuccessfulFetchAt
+          ? Math.floor((Date.now() - prev.lastSuccessfulFetchAt.getTime()) / 1000)
+          : Infinity;
+
+        const newState: typeof prev = {
+          ...prev,
+          dataFreshnessSeconds: secondsSinceLastSuccess,
+        };
+
+        // Mark as stale if too long since successful fetch
+        if (secondsSinceLastSuccess > STALE_THRESHOLD_SECONDS && prev.connectionState !== "error") {
+          newState.connectionState = "stale";
+        }
+
+        return newState;
+      });
+    }, 5000); // Update freshness every 5 seconds
+
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+      clearInterval(freshnessInterval);
+    };
+  }, [mode, performPoll]);
+
+  // Manual refresh function
+  const refreshLiveData = useCallback(async () => {
+    await performPoll();
+  }, [performPoll]);
+
   // ── Cleanup deviation layers on unmount ──
   useEffect(() => {
     return () => {
       const map = mapRef.current;
       if (map) {
         removeDeviationAnalyticsLayers(map);
+      }
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
       }
     };
   }, []);
@@ -714,6 +902,7 @@ export function useMapboxMap(containerRef: React.RefObject<HTMLDivElement | null
     stopCascade,
     selectedCorridorId,
     setSelectedCorridorId,
+    selectedCorridorEvidenceCount,
     layerVisibility,
     toggleLayer,
     corridorAnimState,
@@ -723,5 +912,11 @@ export function useMapboxMap(containerRef: React.RefObject<HTMLDivElement | null
     driftResult,
     computeDriftForCorridor,
     clearDrift,
+    // Mode & Live Monitoring
+    mode,
+    setMode,
+    liveStatus,
+    refreshLiveData,
+    isCascadeEnabled: mode === "historical",
   };
 }

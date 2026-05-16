@@ -26,7 +26,16 @@ export function getComputeScoresApiUrl(): string {
 }
 
 export function getOllamChatApiUrl(): string {
-  return pickUrl(import.meta.env.VITE_API_OLLAM_CHAT_URL as string | undefined, "ollam-chat");
+  const explicit = import.meta.env.VITE_API_OLLAM_CHAT_URL as string | undefined;
+  if (explicit) return explicit;
+
+  const ollamaHost = (import.meta.env.VITE_OLLAMA_HOST as string | undefined)?.replace(/\/+$/, "");
+  if (ollamaHost) {
+    if (import.meta.env.DEV) return "/ollama/api/chat";
+    return `${ollamaHost}/api/chat`;
+  }
+
+  return pickUrl(undefined, "ollam-chat");
 }
 
 export function getPhantomMcpApiUrl(): string {
